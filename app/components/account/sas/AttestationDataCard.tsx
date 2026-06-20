@@ -8,6 +8,9 @@ import {
 } from 'sas-lib';
 
 import { SolarizedJsonViewer as ReactJson } from '@/app/components/common/JsonViewer';
+import { toBase64 } from '@/app/shared/lib/bytes';
+import { Logger } from '@/app/shared/lib/logger';
+import { Card, CardHeader, CardTitle } from '@/app/shared/ui/Card';
 import {
     decodeAccount,
     decodeWithType,
@@ -34,19 +37,18 @@ export function AttestationDataCard({ account, onNotFound }: { account?: Account
 function SchemaCard({ schema }: { schema: SasSchema }) {
     const borshSchema = convertSasSchemaToBorshSchema(schema);
     return (
-        <div className="card">
-            <div className="card-header">
-                <div className="row align-items-center">
-                    <div className="col">
-                        <h3 className="card-header-title">Schema Layout (Borsh)</h3>
-                    </div>
-                </div>
-            </div>
+        <Card ui="dashkit">
+            <CardHeader ui="dashkit">
+                <CardTitle as="h3" ui="dashkit">
+                    Schema Layout (Borsh)
+                </CardTitle>
+            </CardHeader>
 
-            <div className="card metadata-json-viewer m-4">
+            {/* .string-value is emitted by the ReactJson library — the arbitrary variant scopes the break-all rule to its descendant nodes only. */}
+            <Card ui="dashkit" className="m-6 [&_.string-value]:break-all">
                 <ReactJson src={borshSchema['schema']} style={{ padding: 25 }} name={false} />
-            </div>
-        </div>
+            </Card>
+        </Card>
     );
 }
 
@@ -66,26 +68,25 @@ function AttestationCard({ attestation }: { attestation: SasAttestation }) {
             decoded = deserializeAttestationDataWithBorsh200(schema, Uint8Array.from(attestation.data));
         }
     } catch (e) {
-        console.error(e);
+        Logger.error(e);
     }
 
     return (
-        <div className="card">
-            <div className="card-header">
-                <div className="row align-items-center">
-                    <div className="col">
-                        <h3 className="card-header-title">Attestation Data {decoded ? '' : 'Raw (Base64)'}</h3>
-                    </div>
-                </div>
-            </div>
+        <Card ui="dashkit">
+            <CardHeader ui="dashkit">
+                <CardTitle as="h3" ui="dashkit">
+                    Attestation Data {decoded ? '' : 'Raw (Base64)'}
+                </CardTitle>
+            </CardHeader>
 
             {decoded ? (
-                <div className="card metadata-json-viewer m-4">
+                // .string-value is emitted by the ReactJson library — the arbitrary variant scopes the break-all rule to its descendant nodes only.
+                <Card ui="dashkit" className="m-6 [&_.string-value]:break-all">
                     <ReactJson src={decoded} style={{ padding: 25 }} name={false} />
-                </div>
+                </Card>
             ) : (
                 <div
-                    className="font-monospace"
+                    className="font-mono"
                     style={{
                         fontSize: '0.85rem',
                         lineHeight: '1.2',
@@ -96,9 +97,9 @@ function AttestationCard({ attestation }: { attestation: SasAttestation }) {
                         wordBreak: 'break-all',
                     }}
                 >
-                    {Buffer.from(attestation.data).toString('base64') || '(empty)'}
+                    {toBase64(new Uint8Array(attestation.data)) || '(empty)'}
                 </div>
             )}
-        </div>
+        </Card>
     );
 }

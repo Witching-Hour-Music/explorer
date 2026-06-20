@@ -5,12 +5,12 @@ import {
     OG_IMAGE_SIZE,
     parseCompositeSignature,
     ReceiptError,
-} from '@features/receipt';
+} from '@features/receipt/server';
 import { assertIsSignature } from '@solana/kit';
 import { ImageResponse } from 'next/og';
 import { NextRequest, NextResponse } from 'next/server';
 
-import Logger from '@/app/utils/logger';
+import { Logger } from '@/app/shared/lib/logger';
 
 export const runtime = 'edge';
 
@@ -20,11 +20,11 @@ const DEFAULT_CACHE_HEADERS = {
 };
 
 type Props = Readonly<{
-    params: { signature: string };
+    params: Promise<{ signature: string }>;
 }>;
 
-export async function GET(request: NextRequest, { params }: Props) {
-    const { signature: compositeSignature } = params;
+export async function GET(request: NextRequest, props: Props) {
+    const { signature: compositeSignature } = await props.params;
     const { signature, cluster } = parseCompositeSignature(compositeSignature);
 
     if (!isReceiptEnabled) return new NextResponse('Not Found', { status: 404 });
@@ -34,7 +34,8 @@ export async function GET(request: NextRequest, { params }: Props) {
     const cacheHeaders = getCacheHeaders();
 
     try {
-        const receipt = await createReceipt(signature, cluster);
+        const result = await createReceipt(signature, cluster);
+        const receipt = result.kind === 'ok' ? result.receipt : undefined;
 
         const imageResponse = new ImageResponse(<BaseReceiptImage data={receipt} />, {
             ...OG_IMAGE_SIZE,
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest, { params }: Props) {
             headers: { ...cacheHeaders, 'Content-Type': 'image/png' },
         });
     } catch (e) {
-        Logger.error(`Failed to process receipt for signature ${signature}:`, e);
+        Logger.error(new Error('[og:receipt] Failed to process receipt', { cause: e }), { signature });
 
         const status = e instanceof ReceiptError ? e.status : 500;
         const body = status === 404 ? 'Receipt not found' : 'Failed to process request';

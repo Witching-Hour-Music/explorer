@@ -1,19 +1,19 @@
 'use client';
 
+import { Tooltip, TooltipContent, TooltipTrigger } from '@components/shared/ui/tooltip';
+import { cn } from '@components/shared/utils';
 import {
     FormattedIdl,
-    getIdlSpec,
+    getIdlStandard,
     isIdlProgramIdMismatch,
     isInteractiveIdlSupported,
     type SupportedIdl,
 } from '@entities/idl';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@shared/ui/tooltip';
-import { cn } from '@shared/utils';
 import { isEnvEnabled } from '@utils/env';
 import React, { useMemo } from 'react';
 import { PlayCircle, XCircle } from 'react-feather';
 
-import { idlAnalytics } from '@/app/shared/lib/analytics';
+import { BaseWarningCard } from '@/app/shared/ui/WarningCard';
 
 import { BaseIdlAccounts } from '../formatted-idl/ui/BaseIdlAccounts';
 import { BaseIdlConstants } from '../formatted-idl/ui/BaseIdlConstants';
@@ -23,7 +23,7 @@ import { BaseIdlInstructions } from '../formatted-idl/ui/BaseIdlInstructions';
 import { BaseIdlPdas } from '../formatted-idl/ui/BaseIdlPdas';
 import { BaseIdlTypes } from '../formatted-idl/ui/BaseIdlTypes';
 import type { FormattedIdlDataView, IdlDataKeys } from '../formatted-idl/ui/types';
-import { BaseWarningCard } from '../interactive-idl/ui/BaseWarningCard';
+import { createIdlAnalytics } from '../interactive-idl/lib/analytics';
 import { InteractWithIdl } from '../interactive-idl/ui/InteractWithIdl';
 
 const IS_INTERACTIVE_IDL_ENABLED = isEnvEnabled(process.env.NEXT_PUBLIC_INTERACTIVE_IDL_ENABLED);
@@ -55,7 +55,7 @@ export function useTabs(idl: FormattedIdl | null, originalIdl: SupportedIdl, pro
         const createTabRenderer = <K extends IdlDataKeys>(
             Component: React.ComponentType<FormattedIdlDataView<K>>,
             data: FormattedIdl[K] | undefined,
-            tabName: string
+            tabName: string,
         ) => {
             const TabRenderer = () => {
                 if (hasSearch && (!data || data.length === 0)) {
@@ -112,22 +112,18 @@ export function useTabs(idl: FormattedIdl | null, originalIdl: SupportedIdl, pro
             },
         ];
 
-        // Only show interactive tab for Anchor IDLs (getIdlSpec returns null for legacy and codama)
-        if (originalIdl && getIdlSpec(originalIdl) !== null && IS_INTERACTIVE_IDL_ENABLED) {
-            const isVersionUnsupported = !isInteractiveIdlSupported(originalIdl);
+        // Show interactive tab for modern Anchor IDLs and Codama IDLs
+        if (originalIdl && isInteractiveIdlSupported(originalIdl) && IS_INTERACTIVE_IDL_ENABLED) {
             const isProgramIdMismatch = programId ? isIdlProgramIdMismatch(originalIdl, programId) : false;
-            const isInteractDisabled = isVersionUnsupported || isProgramIdMismatch;
-
-            const warningMessage = isProgramIdMismatch
-                ? 'IDL program address does not match the current program'
-                : 'Current version of IDL is not supported';
+            // Analytics is created during runtime because GA events are scoped to the IDL standard (Anchor | Codama).
+            const idlAnalytics = createIdlAnalytics(getIdlStandard(originalIdl));
 
             tabItems.push({
                 disabled: !idl.instructions?.length,
                 id: 'interact',
                 render: () =>
-                    isInteractDisabled ? (
-                        <BaseWarningCard message={warningMessage} />
+                    isProgramIdMismatch ? (
+                        <BaseWarningCard message="IDL program address does not match the current program" />
                     ) : (
                         <InteractWithIdl
                             data={idl.instructions}
@@ -139,12 +135,7 @@ export function useTabs(idl: FormattedIdl | null, originalIdl: SupportedIdl, pro
                             onWalletConnected={idlAnalytics.trackWalletConnected}
                         />
                     ),
-                title: (
-                    <InteractWithIdlTabName
-                        isInteractDisabled={isInteractDisabled}
-                        isProgramIdMismatch={isProgramIdMismatch}
-                    />
-                ),
+                title: <InteractWithIdlTabName isProgramIdMismatch={isProgramIdMismatch} />,
             } as InteractTab);
         }
 
@@ -166,7 +157,7 @@ function TabTitle({ baseTitle, data, searchStr }: TabTitleProps) {
     if (hasSearch && count !== undefined) {
         return (
             <>
-                {baseTitle} <span className="e-font-mono e-text-xs">{`(${count})`}</span>
+                {baseTitle} <span className="font-mono text-xs">{`(${count})`}</span>
             </>
         );
     }
@@ -175,45 +166,37 @@ function TabTitle({ baseTitle, data, searchStr }: TabTitleProps) {
 
 function NoSearchResultsPlaceholder({ tabName }: { tabName: string }) {
     return (
-        <div className="e-flex e-items-center e-justify-center e-py-6 e-text-center">
-            <p className="e-m-0 e-text-sm e-text-neutral-500">No {tabName.toLowerCase()} found</p>
+        <div className="flex items-center justify-center py-6 text-center">
+            <p className="m-0 text-sm text-neutral-500">No {tabName.toLowerCase()} found</p>
         </div>
     );
 }
 
-function InteractWithIdlTabName({
-    isInteractDisabled,
-    isProgramIdMismatch = false,
-}: {
-    isInteractDisabled: boolean;
-    isProgramIdMismatch?: boolean;
-}) {
+function InteractWithIdlTabName({ isProgramIdMismatch = false }: { isProgramIdMismatch?: boolean }) {
     const tab = (
-        <div className="e-flex e-items-center e-gap-1">
-            {isInteractDisabled ? <XCircle size={14} /> : <PlayCircle size={14} />}
+        <div className="flex items-center gap-1">
+            {isProgramIdMismatch ? <XCircle size={14} /> : <PlayCircle size={14} />}
             Interact
         </div>
     );
 
     const tooltipMessage = isProgramIdMismatch
         ? 'IDL program address does not match the current program'
-        : isInteractDisabled
-        ? 'Currently we support only modern Anchor IDL >= 0.30.1'
-        : "Launch Anchor's instructions";
+        : 'Launch program instructions';
 
     return (
         <Tooltip>
             <TooltipTrigger asChild>
                 <div
-                    className={cn('e-w-fit', {
-                        'e-cursor-not-allowed e-opacity-50': isInteractDisabled,
+                    className={cn('w-fit', {
+                        'cursor-not-allowed opacity-50': isProgramIdMismatch,
                     })}
                 >
                     {tab}
                 </div>
             </TooltipTrigger>
             <TooltipContent>
-                <div className="e-min-w-36 e-max-w-16">{tooltipMessage}</div>
+                <div className="min-w-36 max-w-16">{tooltipMessage}</div>
             </TooltipContent>
         </Tooltip>
     );

@@ -7,6 +7,11 @@ import { useCluster } from '@providers/cluster';
 import { getAnchorProgramName, mapAccountToRows } from '@utils/anchor';
 import React, { useMemo } from 'react';
 
+import { equals, toBuffer } from '@/app/shared/lib/bytes';
+import { Logger } from '@/app/shared/lib/logger';
+import { Card, CardHeader, CardTitle } from '@/app/shared/ui/Card';
+import { BaseTable } from '@/app/shared/ui/Table';
+
 export function AnchorAccountCard({ account }: { account: Account }) {
     const { lamports } = account;
     const { url, cluster } = useCluster();
@@ -20,14 +25,14 @@ export function AnchorAccountCard({ account }: { account: Account }) {
         if (anchorProgram && rawData) {
             const coder = new BorshAccountsCoder(anchorProgram.idl);
             const account = anchorProgram.idl.accounts?.find((accountType: any) =>
-                (rawData as Buffer).slice(0, 8).equals(coder.accountDiscriminator(accountType.name))
+                equals(rawData.slice(0, 8), coder.accountDiscriminator(accountType.name)),
             );
             if (account) {
                 accountDef = anchorProgram.idl.types?.find((type: any) => type.name === account.name);
                 try {
-                    decodedAccountData = coder.decode(account.name, rawData);
+                    decodedAccountData = coder.decode(account.name, toBuffer(rawData));
                 } catch (err) {
-                    console.log(err);
+                    Logger.debug('[components:anchor-account] Failed to decode account data', { error: err });
                 }
             }
         }
@@ -46,32 +51,25 @@ export function AnchorAccountCard({ account }: { account: Account }) {
 
     return (
         <div>
-            <div className="card">
-                <div className="card-header">
-                    <div className="row align-items-center">
-                        <div className="col">
-                            <h3 className="card-header-title">
-                                {programName}: {accountDef.name.charAt(0).toUpperCase() + accountDef.name.slice(1)}
-                            </h3>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="table-responsive mb-0">
-                    <table className="table table-sm table-nowrap card-table">
-                        <thead>
-                            <tr>
-                                <th className="w-1">Field</th>
-                                <th className="w-1">Type</th>
-                                <th className="w-1">Value</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {mapAccountToRows(decodedAccountData, accountDef as IdlTypeDef, anchorProgram.idl)}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            <Card ui="dashkit">
+                <CardHeader ui="dashkit">
+                    <CardTitle as="h3" ui="dashkit">
+                        {programName}: {accountDef.name.charAt(0).toUpperCase() + accountDef.name.slice(1)}
+                    </CardTitle>
+                </CardHeader>
+                <BaseTable ui="dashkit" variant="card" nowrap>
+                    <BaseTable.Head>
+                        <BaseTable.Row>
+                            <BaseTable.HeaderCell className="w-px">Field</BaseTable.HeaderCell>
+                            <BaseTable.HeaderCell className="w-px">Type</BaseTable.HeaderCell>
+                            <BaseTable.HeaderCell className="w-px">Value</BaseTable.HeaderCell>
+                        </BaseTable.Row>
+                    </BaseTable.Head>
+                    <BaseTable.Body>
+                        {mapAccountToRows(decodedAccountData, accountDef as IdlTypeDef, anchorProgram.idl)}
+                    </BaseTable.Body>
+                </BaseTable>
+            </Card>
         </div>
     );
 }

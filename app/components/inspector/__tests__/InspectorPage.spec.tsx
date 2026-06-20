@@ -7,9 +7,11 @@ import React from 'react';
 import type { Key } from 'swr';
 import { describe, expect, type Mock, test, vi } from 'vitest';
 
+import { InstructionParserProvider } from '@/app/entities/instruction-parser';
 import { AccountsProvider } from '@/app/providers/accounts';
 import { ClusterProvider } from '@/app/providers/cluster';
 import { ScrollAnchorProvider } from '@/app/providers/scroll-anchor';
+import { instructionParserDispatcher } from '@/app/tx/instruction-parser-dispatcher';
 
 import { TransactionInspectorPage } from '../InspectorPage';
 
@@ -26,11 +28,13 @@ vi.mock('next/navigation', () => ({
 
 describe('TransactionInspectorPage with Squads Transaction', () => {
     beforeEach(async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+
         const params = new URLSearchParams();
         params.set('squadsTx', 'ASwDJP5mzxV1dfov2eQz5WAVEy833nwK17VLcjsrZsZf');
 
         vi.spyOn(await import('next/navigation'), 'useSearchParams').mockReturnValue(
-            params as unknown as ReturnType<typeof useSearchParams>
+            params as unknown as ReturnType<typeof useSearchParams>,
         );
         vi.spyOn(await import('next/navigation'), 'useRouter').mockReturnValue({
             push: vi.fn(),
@@ -43,12 +47,14 @@ describe('TransactionInspectorPage with Squads Transaction', () => {
                 new Response(JSON.stringify({}), {
                     headers: { 'Content-Type': 'application/json' },
                     status: 200,
-                })
-            )
+                }),
+            ),
         );
     });
 
     afterEach(() => {
+        vi.clearAllTimers();
+        vi.useRealTimers();
         vi.clearAllMocks();
     });
 
@@ -69,12 +75,14 @@ describe('TransactionInspectorPage with Squads Transaction', () => {
         renderWithContext();
 
         expect(await screen.findByRole('row', { name: /Fee Payer/i })).toHaveTextContent(
-            'F3S4PD17Eo3FyCMropzDLCpBFuQuBmufUVBBdKEHbQFT'
+            'F3S4PD17Eo3FyCMropzDLCpBFuQuBmufUVBBdKEHbQFT',
         );
         expect(screen.queryByText(/Inspector Input/i)).toBeNull();
 
         expect(screen.getByText(/Account List \(8\)/i)).not.toBeNull();
-        expect(screen.getByText(/BPF Upgradeable Loader Instruction/i)).not.toBeNull();
+        // The card title splits programName and "Instruction" into separate spans so the
+        // programName can truncate independently on mobile; multiple matches are expected.
+        expect(screen.getAllByText(/BPF Upgradeable Loader/i).length).toBeGreaterThan(0);
     });
 
     test('should render when account loading fails', async () => {
@@ -115,7 +123,7 @@ describe('TransactionInspectorPage with Squads Transaction', () => {
         renderWithContext();
 
         expect(await screen.findByRole('row', { name: /Fee Payer/i })).toHaveTextContent(
-            '62gRsAdA6dcbf4Frjp7YRFLpFgdGu8emAACcnnREX3L3'
+            '62gRsAdA6dcbf4Frjp7YRFLpFgdGu8emAACcnnREX3L3',
         );
         expect(screen.queryByText(/Inspector Input/i)).toBeNull();
 
@@ -131,10 +139,12 @@ function setup() {
             <ScrollAnchorProvider>
                 <ClusterProvider>
                     <AccountsProvider>
-                        <TransactionInspectorPage showTokenBalanceChanges={false} />
+                        <InstructionParserProvider dispatcher={instructionParserDispatcher}>
+                            <TransactionInspectorPage showTokenBalanceChanges={false} />
+                        </InstructionParserProvider>
                     </AccountsProvider>
                 </ClusterProvider>
-            </ScrollAnchorProvider>
+            </ScrollAnchorProvider>,
         );
     };
     const specificAccountKey = [
@@ -147,7 +157,7 @@ function setup() {
     const squadsAccountInfo: AccountInfo<Buffer> = {
         data: Buffer.from(
             'qPqiZFEOos+fErS/xkrbJRCvXG3UbwrUsJlVxCt0e4xgzjQyewfzMULyaPFkYPsCiNMe9FN//udpL5PwKAM/1qdskrvY+9nLCAAAAAAAAAD/AP8AAAAAAQEECAAAANCjHLRKvgiq2AoZK5QSGOfYj5bTGybeyAspA1+XDrVyM90v0fImaE0NQYcSinPuk++6GJEe5cKJZ4w9p0mAYgkJKhPulcQcugimf1rGfo334doRYl4dZBN/j08jgwN/FDCuVi3sTsjyvqU+oP8oI/e92Q78flUtkwuKGo3ug/s7V4efG9ifzqH+b9ldMvB714n0oZVW1d6xudyfhcoWP+0CqPaRToihsOIQFT73Y64rAMK5PRbBJNLAU3oQBIAAAAan1RcZLFxRIYzJTD1K8X9Y2u4Im6H9ROPb2YoAAAAABqfVFxjHdMkoVmOYaR1etoteuKObS21cc1VbIQAAAAABAAAABQcAAAABAgMEBgcABAAAAAMAAAAAAAAA',
-            'base64'
+            'base64',
         ),
         executable: false,
         lamports: 1000000,
@@ -158,7 +168,7 @@ function setup() {
     const squadsLookupTableAccountInfo: AccountInfo<Buffer> = {
         data: Buffer.from(
             'qPqiZFEOos8bpNmzOFnIgq7HtFDkjs0zoH+RjHiREtlTMLrrxCnOoOcFvY3L4K/GkofeZWEMwteLWwiE+IC8lnd8Ck5flvyb3QQAAAAAAAD+AP8AAAAAAQEFBgAAAEq4mP2n8jYC4uvQ/2riMoE0PhxgqIF66HAqkgBn4/7YWvNmtUiOi7IxoG9Yg+DNwzaHxoGjbIgVzFpOmwEZBmf9dPjWz8/N7PpjzVI1TulkO4Egf8ZYe7WLo0OjhhrzoYQzUnBMSyxrGPE/4v6Xp81WeB65mgEPCx6Nm2doqmmMmJEqbWg9L9Do0t/Tr7QiU2rSPiAV6W0bNxo4qIu+aRNLpsNxnQkq2EAyNB4e5Vx8/7kaTXVN+Y+DEOMrcIenQgEAAAAGCgAAAAABAgMEBQcICQowAAAA9r57/qtrEp4AZc0dAAAAAL9A3h92lHzal8AhXk0xQ6drSpPcsjemGX1gSwpnAfeuAQAAAC2j9Rh4Ufp3UyACH6zJgVGpNk7XhltxlBh5LvHTkFE+AAAAAAUAAAA4LwgHBQ==',
-            'base64'
+            'base64',
         ),
         executable: false,
         lamports: 1000000,

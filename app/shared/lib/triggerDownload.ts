@@ -1,3 +1,5 @@
+import { fromBase64, isValidBase64 } from './bytes';
+
 export interface DownloadOptions {
     /** MIME type for the file */
     type?: string;
@@ -42,26 +44,12 @@ const triggerDownloadBlob = (blob: Blob, filename: string): void => {
     }
 };
 
-const isValidBase64 = (str: string): boolean => {
-    try {
-        // eslint-disable-next-line no-restricted-syntax -- validate base64 string format
-        const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
-        if (!base64Regex.test(str)) {
-            return false;
-        }
-        Buffer.from(str, 'base64');
-        return true;
-    } catch {
-        return false;
-    }
-};
-
 const formatBytes = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+    return `${Math.round((bytes / Math.pow(k, i)) * 100) / 100} ${sizes[i]}`;
 };
 
 /**
@@ -90,12 +78,12 @@ export const triggerDownload = async (data: string, filename: string, options?: 
     if (estimatedDecodedSize > maxSize) {
         throw new Error(
             `File size (estimated ${formatBytes(estimatedDecodedSize)}) exceeds maximum allowed size (${formatBytes(
-                maxSize
-            )})`
+                maxSize,
+            )})`,
         );
     }
 
-    const decodedData = Buffer.from(data, 'base64');
+    const decodedData = fromBase64(data);
     const blob = new Blob([decodedData], type ? { type } : {});
 
     triggerDownloadBlob(blob, filename);
@@ -119,7 +107,7 @@ export const triggerDownloadText = async (text: string, filename: string, option
 
     if (text.length > maxSize) {
         throw new Error(
-            `File size (${formatBytes(text.length)}) exceeds maximum allowed size (${formatBytes(maxSize)})`
+            `File size (${formatBytes(text.length)}) exceeds maximum allowed size (${formatBytes(maxSize)})`,
         );
     }
 

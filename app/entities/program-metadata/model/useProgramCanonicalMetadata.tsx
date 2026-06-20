@@ -1,10 +1,11 @@
 'use client';
 
+import { isSolanaError, SOLANA_ERROR__ACCOUNTS__ACCOUNT_NOT_FOUND } from '@solana/kit';
 import { fetch } from 'cross-fetch';
 import useSWRImmutable from 'swr/immutable';
 
+import { Logger } from '@/app/shared/lib/logger';
 import { Cluster } from '@/app/utils/cluster';
-import Logger from '@/app/utils/logger';
 
 import { getProgramCanonicalMetadata } from '../api/getProgramCanonicalMetadata';
 
@@ -33,15 +34,21 @@ function shouldUseDirectRpc(cluster: Cluster, url: string): boolean {
     return isLocalRpcUrl(url);
 }
 
+// Most programs don't publish canonical metadata, so a missing account is the expected outcome —
+// the API route filters the same code (see app/api/program-metadata-idl/route.ts).
+function isAccountNotFoundError(error: unknown): boolean {
+    return isSolanaError(error, SOLANA_ERROR__ACCOUNTS__ACCOUNT_NOT_FOUND);
+}
+
 export function useProgramCanonicalMetadata(
     programAddress: string,
     seed: string,
     url: string,
     cluster: Cluster,
     enabled: boolean,
-    useSuspense = false
+    useSuspense = false,
 ) {
-    const { data } = useSWRImmutable(
+    const { data, isLoading } = useSWRImmutable(
         `program-metadata-${programAddress}-${url}-${seed}`,
         async () => {
             if (!enabled) {
@@ -52,33 +59,30 @@ export function useProgramCanonicalMetadata(
                 // For custom clusters or local RPC URLs, fetch directly from client
                 // The API route doesn't support custom/local endpoints
                 if (shouldUseDirectRpc(cluster, url)) {
-                    return getProgramCanonicalMetadata(programAddress, seed, url);
+                    return await getProgramCanonicalMetadata(programAddress, seed, url);
                 }
 
                 // For known clusters, use the API route (benefits from caching)
                 const response = await fetch(
-                    `/api/programMetadataIdl?programAddress=${programAddress}&cluster=${cluster}&seed=${seed}`
+                    `/api/program-metadata-idl?programAddress=${programAddress}&cluster=${cluster}&seed=${seed}`,
                 );
                 if (response.ok) {
                     const data = await response.json();
-                    const { details, programMetadata } = data;
-
-                    // In case of 403, we have ok response but it contains {details: {error: string}} data
-                    if (details?.error) {
-                        Logger.error(new Error(details.error));
-                        return null;
-                    }
-
-                    return programMetadata || null;
+                    return data.programMetadata || null;
                 }
 
                 return null;
             } catch (error) {
-                Logger.error(`Error fetching canonical metadata, seed ${seed}`, error);
+                if (isAccountNotFoundError(error)) {
+                    return null;
+                }
+                Logger.error(new Error('[program-metadata] Error fetching canonical metadata', { cause: error }), {
+                    seed,
+                });
                 return null;
             }
         },
-        { suspense: useSuspense }
+        { suspense: useSuspense },
     );
-    return { programMetadata: data };
+    return { isLoading, programMetadata: data };
 }

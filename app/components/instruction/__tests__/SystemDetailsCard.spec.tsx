@@ -1,10 +1,21 @@
 /* eslint-disable no-restricted-syntax -- test assertions use RegExp for pattern matching */
-import { intoParsedInstruction, intoParsedTransaction } from '@components/inspector/into-parsed-data';
-import { ParsedInstruction, SystemProgram, TransactionMessage } from '@solana/web3.js';
-import { render, screen } from '@testing-library/react';
+import {
+    createInstructionParserDispatcher,
+    isParsedInstruction,
+    toParsedTransaction,
+} from '@entities/instruction-parser';
+import { systemInstructionParser } from '@features/decode-instruction-system';
+import { SystemProgram, TransactionInstruction, TransactionMessage } from '@solana/web3.js';
+import { render, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 
-vi.mock('next/navigation');
+const dispatcher = createInstructionParserDispatcher([systemInstructionParser]);
+
+vi.mock('next/navigation', () => ({
+    usePathname: vi.fn(),
+    useRouter: vi.fn(() => ({ push: vi.fn() })),
+    useSearchParams: vi.fn(() => ({ get: vi.fn(), has: vi.fn(), toString: () => '' })),
+}));
 
 import * as stubs from '@/app/__tests__/mock-stubs';
 import * as mock from '@/app/__tests__/mocks';
@@ -21,8 +32,8 @@ describe('instruction::SystemDetailsCard', () => {
         const m = mock.deserializeMessage(stubs.systemTransferMsg);
         const ti = TransactionMessage.decompile(m, { addressLookupTableAccounts: [] }).instructions[index];
 
-        const parsedIx = intoParsedInstruction(ti);
-        const tx = intoParsedTransaction(ti, m, [parsedIx]);
+        const parsedIx = dispatchOrThrow(ti);
+        const tx = toParsedTransaction(ti, m, [parsedIx]);
 
         expect(ti.programId.equals(SystemProgram.programId)).toBeTruthy();
 
@@ -31,19 +42,16 @@ describe('instruction::SystemDetailsCard', () => {
                 <ClusterProvider>
                     <TransactionsProvider>
                         <AccountsProvider>
-                            <SystemDetailsCard
-                                index={index}
-                                ix={parsedIx as ParsedInstruction}
-                                raw={ti}
-                                result={{ err: null }}
-                                tx={tx}
-                            />
+                            <SystemDetailsCard index={index} ix={parsedIx} raw={ti} result={{ err: null }} tx={tx} />
                         </AccountsProvider>
                     </TransactionsProvider>
                 </ClusterProvider>
-            </ScrollAnchorProvider>
+            </ScrollAnchorProvider>,
         );
-        expect(screen.getByText(/System Program: Transfer/)).toBeInTheDocument();
+        // waitFor's act() boundary absorbs ClusterProvider's post-mount dispatch
+        await waitFor(() => {
+            expect(screen.getByText(/System Program: Transfer/)).toBeInTheDocument();
+        });
     });
 
     test('should render SystemProgram::TransferWithSeed instruction', async () => {
@@ -51,8 +59,8 @@ describe('instruction::SystemDetailsCard', () => {
         const m = mock.deserializeMessage(stubs.systemTransferWithSeedMsg);
         const ti = TransactionMessage.decompile(m, { addressLookupTableAccounts: [] }).instructions[index];
 
-        const parsedIx = intoParsedInstruction(ti);
-        const tx = intoParsedTransaction(ti, m, [parsedIx]);
+        const parsedIx = dispatchOrThrow(ti);
+        const tx = toParsedTransaction(ti, m, [parsedIx]);
 
         expect(ti.programId.equals(SystemProgram.programId)).toBeTruthy();
 
@@ -61,18 +69,21 @@ describe('instruction::SystemDetailsCard', () => {
                 <ClusterProvider>
                     <TransactionsProvider>
                         <AccountsProvider>
-                            <SystemDetailsCard
-                                index={index}
-                                ix={parsedIx as ParsedInstruction}
-                                raw={ti}
-                                result={{ err: null }}
-                                tx={tx}
-                            />
+                            <SystemDetailsCard index={index} ix={parsedIx} raw={ti} result={{ err: null }} tx={tx} />
                         </AccountsProvider>
                     </TransactionsProvider>
                 </ClusterProvider>
-            </ScrollAnchorProvider>
+            </ScrollAnchorProvider>,
         );
-        expect(screen.getByText(/System Program: Transfer w\/ Seed/)).toBeInTheDocument();
+        // waitFor's act() boundary absorbs ClusterProvider's post-mount dispatch
+        await waitFor(() => {
+            expect(screen.getByText(/System Program: Transfer w\/ Seed/)).toBeInTheDocument();
+        });
     });
 });
+
+function dispatchOrThrow(ti: TransactionInstruction) {
+    const parsedIx = dispatcher.fromTransactionInstruction(ti);
+    if (!isParsedInstruction(parsedIx)) throw new Error('System slice did not recognise fixture');
+    return parsedIx;
+}

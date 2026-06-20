@@ -5,9 +5,11 @@ import { AlertCircle } from 'react-feather';
 
 import { DownloadableButton } from '@/app/components/common/Downloadable';
 import { ErrorCard } from '@/app/components/common/ErrorCard';
+import { Button } from '@/app/components/shared/ui/button';
 import { useProgramMetadataSecurityTxt } from '@/app/entities/program-metadata';
 import type { UpgradeableLoaderAccountData } from '@/app/providers/accounts';
 import { useCluster } from '@/app/providers/cluster';
+import { Card, CardBody, CardHeader, CardTitle } from '@/app/shared/ui/Card';
 
 import { NO_SECURITY_TXT_ERROR } from '../lib/constants';
 import { fromProgramData } from '../lib/fromProgramData';
@@ -73,31 +75,39 @@ export function ProgramSecurityTxtCard({
     ) : null;
 
     return (
-        <div className="card security-txt e-overflow-hidden">
-            <div className="card-header e-flex e-h-auto e-min-h-[60px] e-items-center">
-                <h3 className="card-header-title mb-0 d-flex align-items-center gap-3 e-mr-4">
+        <Card ui="dashkit" className="overflow-hidden">
+            <CardHeader ui="dashkit">
+                <CardTitle as="h3" ui="dashkit" className="mr-4 flex items-center gap-3">
                     Security.txt
                     <SecurityTxtVersionBadge version={pmpSecurityTxt ? 'pmp' : 'neodyme'} />
-                </h3>
-                <div className="btn btn-sm btn-white e-flex">
-                    <DownloadableButton
-                        data={downloadData}
-                        filename={`${programAddress}-security-txt.json`}
-                        type="application/json"
-                    >
-                        Download
-                    </DownloadableButton>
-                </div>
-            </div>
-            <div className="e-px-6 e-py-4">
-                <small className="text-warning e-flex e-gap-1">
-                    <AlertCircle size={16} className="e-mt-0.5" />
+                </CardTitle>
+                <Button ui="dashkit" variant="white" size="sm" className="flex" asChild>
+                    <div>
+                        <DownloadableButton
+                            data={downloadData}
+                            filename={`${programAddress}-security-txt.json`}
+                            type="application/json"
+                        >
+                            Download
+                        </DownloadableButton>
+                    </div>
+                </Button>
+            </CardHeader>
+            <div className="px-6 py-4">
+                <small className="flex gap-1 text-dk-warning-on-dark">
+                    <AlertCircle size={16} className="mt-0.5" />
                     Note that this is self-reported by the author of the program and might not be accurate
                 </small>
             </div>
-            <ErrorBoundary fallback={<div className="card-body text-center">Invalid security.txt</div>}>
+            <ErrorBoundary
+                fallback={
+                    <CardBody ui="dashkit" className="text-center">
+                        Invalid security.txt
+                    </CardBody>
+                }
+            >
                 {securityTable}
             </ErrorBoundary>
-        </div>
+        </Card>
     );
 }

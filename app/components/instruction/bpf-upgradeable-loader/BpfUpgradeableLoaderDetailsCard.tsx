@@ -5,6 +5,9 @@ import { ParsedInfo } from '@validators/index';
 import React from 'react';
 import { create, Struct } from 'superstruct';
 
+import { Logger } from '@/app/shared/lib/logger';
+import { BaseTable } from '@/app/shared/ui/Table';
+
 import { InstructionCard } from '../InstructionCard';
 import { UnknownDetailsCard } from '../UnknownDetailsCard';
 import {
@@ -55,7 +58,7 @@ export function BpfUpgradeableLoaderDetailsCard(props: DetailsProps) {
                 return <UnknownDetailsCard {...props} />;
         }
     } catch (error) {
-        console.error(error, {
+        Logger.error(error, {
             signature: props.tx.signatures[0],
         });
         return <UnknownDetailsCard {...props} />;
@@ -72,29 +75,29 @@ function renderDetails<T extends object>(props: DetailsProps, parsed: ParsedInfo
         if (value instanceof PublicKey) {
             value = <Address pubkey={value} alignRight link />;
         } else if (key === 'bytes') {
-            value = <pre className="d-inline-block text-start mb-0 data-wrap">{value}</pre>;
+            value = <pre className="data-wrap mb-0 inline-block text-left">{value}</pre>;
         } else if (value === null) {
-            value = <span className="text-muted">None</span>;
+            value = <span className="text-dk-gray-700">None</span>;
         }
 
         attributes.push(
-            <tr key={key}>
-                <td>
-                    {camelToTitleCase(key)} {key === 'bytes' && <span className="text-muted">(Base 64)</span>}
-                </td>
-                <td className="text-lg-end">{value}</td>
-            </tr>
+            <BaseTable.Row key={key}>
+                <BaseTable.Cell>
+                    {camelToTitleCase(key)} {key === 'bytes' && <span className="text-dk-gray-700">(Base 64)</span>}
+                </BaseTable.Cell>
+                <BaseTable.Cell className="text-right">{value}</BaseTable.Cell>
+            </BaseTable.Row>,
         );
     }
 
     return (
         <InstructionCard {...props} title={`BPF Upgradeable Loader: ${camelToTitleCase(parsed.type)}`}>
-            <tr>
-                <td>Program</td>
-                <td className="text-lg-end">
+            <BaseTable.Row>
+                <BaseTable.Cell>Program</BaseTable.Cell>
+                <BaseTable.Cell className="text-right">
                     <Address pubkey={props.ix.programId} alignRight link />
-                </td>
-            </tr>
+                </BaseTable.Cell>
+            </BaseTable.Row>
             {attributes}
         </InstructionCard>
     );

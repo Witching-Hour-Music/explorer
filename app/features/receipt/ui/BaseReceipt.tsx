@@ -8,11 +8,15 @@ import { displayTimestamp } from '@utils/date';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
-import type { FormattedExtendedReceipt } from '../types';
+import { PageContainer } from '@/app/shared/ui/page-container/PageContainer';
+
+import type { FormattedExtendedReceipt, TransferRow } from '../types';
 
 interface BaseReceiptProps {
     data: FormattedExtendedReceipt;
 }
+
+const GRID_CLASSNAMES = 'grid grid-cols-[10px_1fr_1fr_minmax(auto,120px)] gap-x-3';
 
 export function BaseReceipt({
     data: {
@@ -28,36 +32,51 @@ export function BaseReceipt({
         senderHref,
         receiverHref,
         tokenHref,
+        transfers,
     },
 }: BaseReceiptProps) {
+    const transferRows: TransferRow[] = transfers ?? [
+        {
+            amount: total,
+            receiver,
+            receiverHref,
+            sender,
+            senderHref,
+        },
+    ];
+
     return (
-        <div className="e-w-full e-max-w-lg">
-            <div className="e-bg-outer-space-900">
+        <div className="w-full max-w-lg">
+            <div className="bg-outer-space-900">
                 <Header date={date} />
-                <Content
-                    sender={sender}
-                    receiver={receiver}
-                    network={network}
-                    confirmationStatus={confirmationStatus}
-                    senderHref={senderHref}
-                    receiverHref={receiverHref}
-                />
-                <div className="e-my-5 e-border-t e-border-white/10 [border-top-style:dashed]" />
-                <Footer fee={fee} total={total} memo={memo} logoURI={logoURI} tokenHref={tokenHref} />
+                <TransactionSection network={network} confirmationStatus={confirmationStatus} />
+                <TransfersTable transfers={transferRows} fee={fee} logoURI={logoURI} tokenHref={tokenHref} />
+                {memo && (
+                    <div className="flex flex-col gap-1 px-6 pb-6 pt-4 text-xs">
+                        <span className="text-gray-400">Memo</span>
+                        <span className="text-white">{memo}</span>
+                    </div>
+                )}
             </div>
             <Zigzag />
         </div>
     );
 }
 
-export function Header({ date }: { date?: FormattedExtendedReceipt['date'] }) {
+export function Header({
+    date,
+    title = 'Solana Receipt',
+}: {
+    date?: FormattedExtendedReceipt['date'];
+    title?: string;
+}) {
     return (
-        <div className="e-flex e-items-center e-justify-between e-gap-x-4 e-border-b e-border-white/10 e-p-6 e-pt-8 [border-bottom-style:solid]">
-            <h3 className="e-m-0 e-flex-shrink-0 e-font-medium e-text-white">Solana Receipt</h3>
+        <div className="flex items-center justify-between gap-x-4 border-b border-white/10 p-6 [border-bottom-style:solid]">
+            <h3 className="m-0 flex-shrink-0 font-medium text-white">{title}</h3>
             {date && (
                 <Tooltip>
                     <TooltipTrigger asChild>
-                        <span className="e-text-right e-font-mono e-text-sm e-text-gray-400">{date.utc}</span>
+                        <span className="text-right font-mono text-xs text-gray-400">{date.utc}</span>
                     </TooltipTrigger>
                     <TooltipContent side="top">{displayTimestamp(date.timestamp, true)}</TooltipContent>
                 </Tooltip>
@@ -66,160 +85,149 @@ export function Header({ date }: { date?: FormattedExtendedReceipt['date'] }) {
     );
 }
 
-function Content({
-    sender,
-    receiver,
+function TransactionSection({
     network,
     confirmationStatus,
-    senderHref,
-    receiverHref,
-}: Pick<FormattedExtendedReceipt, 'sender' | 'receiver' | 'network' | 'confirmationStatus'> & {
-    senderHref?: string;
-    receiverHref?: string;
-}) {
+}: Pick<FormattedExtendedReceipt, 'network' | 'confirmationStatus'>) {
     return (
-        <div className="e-grid e-grid-cols-2 e-gap-6 e-p-6 e-pt-8 e-text-sm e-text-gray-400">
-            <ListItem
-                label="Sender"
-                tooltipText={sender.address}
-                value={sender.domain ?? sender.truncated}
-                href={senderHref}
-            />
-            <ListItem
-                label="Receiver"
-                tooltipText={receiver.address}
-                value={receiver.domain ?? receiver.truncated}
-                href={receiverHref}
-            />
-            <span>Status</span>
-            <div className="e-text-right">
-                <Badge size="sm" variant="success">
+        <div className="flex flex-col px-6 py-3">
+            <span className="text-xs text-gray-400">Transaction</span>
+            <div className="flex items-center gap-2">
+                <span className="text-xs text-white">{network}</span>
+                <Badge size="xs" variant="success">
                     {confirmationStatus
                         ? confirmationStatus.charAt(0).toUpperCase() + confirmationStatus.slice(1).toLowerCase()
                         : 'Unknown'}
                 </Badge>
             </div>
-            <ListItem label="Network" className="e-text-white" value={network} />
         </div>
     );
 }
 
-function ListItem({
-    label,
-    value,
-    className,
-    tooltipText,
-    href,
+function TransfersTable({
+    transfers,
+    fee,
+    logoURI,
+    tokenHref,
 }: {
-    label: string;
-    value?: string;
-    className?: string;
-    tooltipText?: string;
-    href?: string;
+    transfers: TransferRow[];
+    fee: FormattedExtendedReceipt['fee'];
+    logoURI?: string;
+    tokenHref?: string;
 }) {
-    if (!value) return null;
-
-    const content = (
-        <span className={cn('e-truncate e-text-right e-font-mono e-text-green-400', className)}>{value}</span>
-    );
-
     return (
-        <>
-            <span>{label}</span>
-            <Tooltip>
-                <div className="e-text-right">
-                    <TooltipTrigger asChild>
-                        {href ? (
-                            <a
-                                href={href}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={cn('e-truncate e-font-mono e-text-green-400 hover:e-underline', className)}
-                            >
-                                {value}
-                            </a>
-                        ) : (
-                            content
-                        )}
-                    </TooltipTrigger>
+        <div>
+            <div className="px-6 pb-4 text-xs text-gray-400">
+                <div className={cn('items-center py-1', GRID_CLASSNAMES)}>
+                    <span>#</span>
+                    <span>Sender</span>
+                    <span>Receiver</span>
+                    <span>Amount</span>
                 </div>
-                {tooltipText && (
-                    <TooltipContent side="top">
-                        <span className="e-text-green-400">{tooltipText}</span>
-                    </TooltipContent>
+                {transfers.map((row, i) => (
+                    <TransferRowItem key={i} index={i + 1} row={row} logoURI={logoURI} tokenHref={tokenHref} />
+                ))}
+            </div>
+            <div
+                className={cn(
+                    'border-white/10 px-6 text-xs',
+                    'border-b [border-bottom-style:dashed]',
+                    'border-t [border-top-style:dashed]',
                 )}
-            </Tooltip>
-        </>
+            >
+                <div className={cn('items-center py-4', GRID_CLASSNAMES)}>
+                    <span className="text-gray-400">Fee</span>
+                    <span />
+                    <span />
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className="whitespace-nowrap text-left font-mono text-gray-400">
+                                {fee.formatted} <span className="text-gray-400">SOL</span>
+                            </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">{fee.raw} lamports</TooltipContent>
+                    </Tooltip>
+                </div>
+            </div>
+        </div>
     );
 }
 
-function Footer({
-    fee,
-    total,
-    memo,
+function TransferRowItem({
+    index,
+    row,
     logoURI,
     tokenHref,
-}: Pick<FormattedExtendedReceipt, 'fee' | 'total' | 'memo' | 'logoURI' | 'tokenHref'>) {
+}: {
+    index: number;
+    row: TransferRow;
+    logoURI?: string;
+    tokenHref?: string;
+}) {
+    const { sender, receiver, amount, senderHref, receiverHref } = row;
+    const senderDisplay = sender.domain ?? sender.truncated;
+    const receiverDisplay = receiver.domain ?? receiver.truncated;
+
     return (
-        <div className="e-p-6 e-pt-0 e-text-xs e-text-gray-400">
-            <div className="e-grid e-grid-cols-2 e-items-center">
-                <span className="e-text-white">Total</span>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <div className="e-ml-auto e-flex e-w-fit e-items-center e-gap-2">
-                            {logoURI &&
-                                (tokenHref ? (
-                                    <a
-                                        href={tokenHref}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="e-flex-shrink-0"
-                                    >
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img
-                                            src={logoURI}
-                                            alt="Token logo"
-                                            height="20"
-                                            width="20"
-                                            className="e-flex-shrink-0"
-                                        />
-                                    </a>
-                                ) : (
-                                    // eslint-disable-next-line @next/next/no-img-element
+        <div className={cn('items-center py-1', GRID_CLASSNAMES)}>
+            <span className="text-gray-400">{index}</span>
+            <AddressCell address={sender.address} display={senderDisplay} href={senderHref} />
+            <AddressCell address={receiver.address} display={receiverDisplay} href={receiverHref} />
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <span className="flex items-center gap-1 whitespace-nowrap text-left font-mono text-white">
+                        {logoURI &&
+                            (tokenHref ? (
+                                <a href={tokenHref} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
                                     <img
                                         src={logoURI}
                                         alt="Token logo"
-                                        height="20"
-                                        width="20"
-                                        className="e-flex-shrink-0"
+                                        height="16"
+                                        width="16"
+                                        className="flex-shrink-0"
                                     />
-                                ))}
-                            <span className="e-whitespace-nowrap e-text-2xl e-text-white">
-                                {total.formatted} {total.unit}
-                            </span>
-                        </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                        {total.unit === 'SOL' ? `${total.raw} lamports` : `${total.raw} ${total.unit}`}
-                    </TooltipContent>
-                </Tooltip>
-                <span>Fee</span>
-
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <span className="e-ml-auto e-block e-w-fit">{fee.formatted} SOL</span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">{fee.raw} lamports</TooltipContent>
-                </Tooltip>
-            </div>
-
-            {memo && (
-                <div className="e-mt-3 e-flex e-flex-col e-gap-1">
-                    <span>Memo</span>
-                    <span className="e-text-xs e-text-white">{memo}</span>
-                </div>
-            )}
+                                </a>
+                            ) : (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={logoURI} alt="Token logo" height="16" width="16" className="flex-shrink-0" />
+                            ))}
+                        {amount.formatted} <span className="text-gray-400">{amount.unit}</span>
+                    </span>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                    {amount.unit === 'SOL' ? `${amount.raw} lamports` : `${amount.raw} ${amount.unit}`}
+                </TooltipContent>
+            </Tooltip>
         </div>
+    );
+}
+
+function AddressCell({ address, display, href }: { address: string; display: string; href?: string }) {
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                {href ? (
+                    <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="truncate font-mono text-green-400 hover:underline"
+                    >
+                        <span className="hidden sm:inline">{display}</span>
+                        <span className="truncate sm:hidden">{address}</span>
+                    </a>
+                ) : (
+                    <span className="font-mono text-green-400">
+                        <span className="hidden sm:inline">{display}</span>
+                        <span className="truncate sm:hidden">{address}</span>
+                    </span>
+                )}
+            </TooltipTrigger>
+            <TooltipContent side="top">
+                <span className="text-green-400">{address}</span>
+            </TooltipContent>
+        </Tooltip>
     );
 }
 
@@ -230,11 +238,13 @@ export function NoReceipt({
     timestamp,
     onViewTxClick,
     onRedirect,
+    message,
 }: {
     transactionPath: string;
     timestamp?: number | null;
     onViewTxClick?: () => void;
     onRedirect?: () => void;
+    message?: string;
 }) {
     const date = timestamp ? { timestamp: timestamp * 1000, utc: new Date(timestamp * 1000).toISOString() } : undefined;
     const [countdown, setCountdown] = useState(REDIRECT_COUNTDOWN);
@@ -250,37 +260,37 @@ export function NoReceipt({
     }, [countdown, onRedirect]);
 
     return (
-        <div className="container e-flex e-min-h-[90vh] e-flex-col e-items-center e-justify-center e-gap-6 e-px-5 e-py-10">
+        <PageContainer className="flex min-h-[90vh] flex-col items-center justify-center gap-6 px-5 py-10">
             <BlurredCircle />
 
-            <div className="e-w-full e-max-w-lg">
-                <div className="e-min-h-96 e-bg-outer-space-900">
-                    <Header date={date} />
-                    <div className="e-p-6 e-text-sm e-text-gray-400">
-                        <p className="e-m-0">
-                            Receipts can only be generated for transactions that only contain a single transfer.
+            <div className="w-full max-w-lg">
+                <div className="min-h-96 bg-outer-space-900">
+                    <Header date={date} title="No Receipt" />
+                    <div className="p-6 text-sm text-gray-400">
+                        <p className="m-0">
+                            {message ?? 'Receipts are only available for simple SOL and token transfers.'}
                         </p>
-                        <p className="e-m-0 e-mt-4">Forwarding to transaction view in {countdown}...</p>
+                        <p className="m-0 mt-4">Forwarding to transaction view in {countdown}...</p>
                     </div>
                 </div>
                 <Zigzag />
             </div>
 
-            <Button size="sm" className="e-me-2" asChild>
+            <Button size="sm" className="me-2" asChild>
                 <Link href={transactionPath} onClick={onViewTxClick}>
                     View transaction in Explorer
                 </Link>
             </Button>
-        </div>
+        </PageContainer>
     );
 }
 
 export function Zigzag() {
-    return <div className="zigzag e-bg-outer-space-900 e-pb-6" />;
+    return <div className="zigzag bg-outer-space-900 pb-6" />;
 }
 
 export function BlurredCircle() {
     return (
-        <div className="e-absolute e-left-[50%] e-top-[55%] e-z-[-1] e-h-2/5 e-w-1/3 e-translate-x-[-50%] e-translate-y-[-50%] e-rounded-full e-bg-emerald-700 e-blur-[150px]" />
+        <div className="absolute left-[50%] top-[55%] z-[-1] h-2/5 w-1/3 translate-x-[-50%] translate-y-[-50%] rounded-full bg-emerald-700 blur-[150px]" />
     );
 }

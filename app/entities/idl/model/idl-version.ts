@@ -7,6 +7,7 @@ export type IdlVersion = 'Legacy' | '0.30.1' | RootNode['version'];
 export type CodamaIdl = RootNode;
 export type AnchorIdl = Idl;
 export type SupportedIdl = CodamaIdl | AnchorIdl;
+export type IdlStandard = 'Anchor' | 'Codama';
 
 /**
  * Wildcard label used for all modern Anchor IDL versions (>= 0.30.1).
@@ -30,6 +31,13 @@ export function getIdlVersion(idl: SupportedIdl): IdlVersion {
         default:
             return MODERN_ANCHOR_IDL_WILDCARD;
     }
+}
+
+/**
+ * Returns the IDL standard name: 'Codama' or 'Anchor'.
+ */
+export function getIdlStandard(idl: SupportedIdl): IdlStandard {
+    return getSerdeIdlSpecType(idl) === 'codama' ? 'Codama' : 'Anchor';
 }
 
 /**

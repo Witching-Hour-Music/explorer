@@ -1,17 +1,20 @@
 import { Copyable } from '@components/common/Copyable';
 import { ErrorCard } from '@components/common/ErrorCard';
 import { TableCardBody } from '@components/common/TableCardBody';
+import { CollapsibleCard } from '@components/shared/ui/collapsible-card';
+import { type AccountInfo, useAccountsInfo } from '@entities/account';
 import { useCluster } from '@providers/cluster';
 import { PublicKey, VersionedMessage } from '@solana/web3.js';
-import { AccountInfo, useAccountsInfo } from '@utils/use-accounts-info';
 import React, { useMemo } from 'react';
 
+import { Badge } from '@/app/components/shared/ui/badge';
 import { toHex } from '@/app/shared/lib/bytes';
+import { CardFooter } from '@/app/shared/ui/Card';
+import { BaseTable } from '@/app/shared/ui/Table';
 
 import { AddressFromLookupTableWithContext, AddressWithContext } from './AddressWithContext';
 
 export function AccountsCard({ message }: { message: VersionedMessage }) {
-    const [expanded, setExpanded] = React.useState(true);
     const { url } = useCluster();
 
     const pubkeys = useMemo(() => message.staticAccountKeys, [message.staticAccountKeys]);
@@ -100,7 +103,7 @@ export function AccountsCard({ message }: { message: VersionedMessage }) {
 
     const totalAccountSize = React.useMemo(
         () => Array.from(accounts.values()).reduce((acc, account) => acc + account.size, 0),
-        [accounts]
+        [accounts],
     );
 
     if (fetchError) {
@@ -112,32 +115,17 @@ export function AccountsCard({ message }: { message: VersionedMessage }) {
     }
 
     return (
-        <div className="card">
-            <div className={`card-header ${!expanded ? 'border-0' : ''}`}>
-                <h3 className="card-header-title">{`Account List (${numAccounts})`}</h3>
-                <button
-                    className={`btn btn-sm d-flex ${expanded ? 'btn-black active' : 'btn-white'}`}
-                    onClick={() => setExpanded(current => !current)}
-                >
-                    {expanded ? 'Collapse' : 'Expand'}
-                </button>
-            </div>
-            {expanded && (
-                <>
-                    <TableCardBody>{accountRows}</TableCardBody>
-                    {!loading && totalAccountSize > 0 && (
-                        <div className="card-footer">
-                            <div className="e-flex e-items-baseline e-justify-end">
-                                <span className="text-muted e-me-2 e-text-[0.625rem] e-uppercase">
-                                    Total Account Size:
-                                </span>
-                                <span className="text-white">{totalAccountSize.toLocaleString('en-US')} bytes</span>
-                            </div>
-                        </div>
-                    )}
-                </>
+        <CollapsibleCard title={`Account List (${numAccounts})`}>
+            <TableCardBody>{accountRows}</TableCardBody>
+            {!loading && totalAccountSize > 0 && (
+                <CardFooter ui="dashkit">
+                    <div className="flex items-baseline justify-end">
+                        <span className="me-2 text-[0.625rem] uppercase text-dk-gray-700">Total Account Size:</span>
+                        <span className="text-white">{totalAccountSize.toLocaleString('en-US')} bytes</span>
+                    </div>
+                </CardFooter>
             )}
-        </div>
+        </CollapsibleCard>
     );
 }
 
@@ -153,23 +141,29 @@ function AccountFromLookupTableRow({
     readOnly: boolean;
 }) {
     return (
-        <tr>
-            <td>
-                <div className="d-flex align-items-start flex-column">
+        <BaseTable.Row>
+            <BaseTable.Cell>
+                <div className="flex flex-col items-start">
                     Account #{accountIndex + 1}
-                    <span className="mt-1">
-                        {!readOnly && <span className="badge bg-danger-soft me-1">Writable</span>}
-                        <span className="badge bg-gray-soft">Address Table Lookup</span>
+                    <span className="mt-[3px]">
+                        {!readOnly && (
+                            <Badge ui="dashkit" variant="destructive" className="mr-[3px]">
+                                Writable
+                            </Badge>
+                        )}
+                        <Badge ui="dashkit" variant="gray">
+                            Address Table Lookup
+                        </Badge>
                     </span>
                 </div>
-            </td>
-            <td className="text-lg-end">
+            </BaseTable.Cell>
+            <BaseTable.Cell className="text-right">
                 <AddressFromLookupTableWithContext
                     lookupTableKey={lookupTableKey}
                     lookupTableIndex={lookupTableIndex}
                 />
-            </td>
-        </tr>
+            </BaseTable.Cell>
+        </BaseTable.Row>
     );
 }
 
@@ -191,26 +185,36 @@ function AccountRow({
     const hexData = accountInfo ? toHex(accountInfo.data) : null;
 
     return (
-        <tr>
-            <td>
-                <div className="d-flex align-items-start flex-column">
+        <BaseTable.Row>
+            <BaseTable.Cell>
+                <div className="flex flex-col items-start">
                     Account #{accountIndex + 1}
-                    <span className="mt-1">
-                        {signer && <span className="badge bg-info-soft me-1">Signer</span>}
-                        {!readOnly && <span className="badge bg-danger-soft me-1">Writable</span>}
+                    <span className="mt-[3px]">
+                        {signer && (
+                            <Badge ui="dashkit" variant="info" className="mr-[3px]">
+                                Signer
+                            </Badge>
+                        )}
+                        {!readOnly && (
+                            <Badge ui="dashkit" variant="destructive" className="mr-[3px]">
+                                Writable
+                            </Badge>
+                        )}
                         {loading ? (
-                            <span className="text-muted">Loading...</span>
+                            <span className="text-dk-gray-700">Loading...</span>
                         ) : accountInfo ? (
                             <Copyable text={hexData}>
-                                <span className="text-muted">{accountInfo.size.toLocaleString('en-US')} bytes</span>
+                                <span className="text-dk-gray-700">
+                                    {accountInfo.size.toLocaleString('en-US')} bytes
+                                </span>
                             </Copyable>
                         ) : null}
                     </span>
                 </div>
-            </td>
-            <td className="text-lg-end">
+            </BaseTable.Cell>
+            <BaseTable.Cell className="text-right">
                 <AddressWithContext pubkey={publicKey} />
-            </td>
-        </tr>
+            </BaseTable.Cell>
+        </BaseTable.Row>
     );
 }

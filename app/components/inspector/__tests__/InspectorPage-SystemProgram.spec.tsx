@@ -1,16 +1,17 @@
-/* eslint-disable no-restricted-syntax, no-restricted-globals -- test assertions use RegExp for pattern matching */
+/* eslint-disable no-restricted-syntax -- test assertions use RegExp for pattern matching */
 import { SystemProgram } from '@solana/web3.js';
 import { render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { describe, expect, test, vi } from 'vitest';
 
 import * as stubs from '@/app/__tests__/mock-stubs';
-import { sleep } from '@/app/__tests__/mocks';
 import { GET } from '@/app/api/anchor/route';
+import { InstructionParserProvider } from '@/app/entities/instruction-parser';
 import { AccountsProvider } from '@/app/providers/accounts';
 import { ClusterProvider } from '@/app/providers/cluster';
 import { ScrollAnchorProvider } from '@/app/providers/scroll-anchor';
 import { TransactionsProvider } from '@/app/providers/transactions';
+import { instructionParserDispatcher } from '@/app/tx/instruction-parser-dispatcher';
 
 import { TransactionInspectorPage } from '../InspectorPage';
 
@@ -120,9 +121,6 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
     }
 
     beforeEach(async () => {
-        // sleep to allow not facing 429s
-        await sleep();
-
         // Setup router mock
         const mockRouter = { push: vi.fn(), replace: vi.fn() };
         vi.spyOn(await import('next/navigation'), 'useRouter').mockReturnValue(mockRouter as any);
@@ -148,7 +146,7 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
         vi.clearAllMocks();
     });
 
-    test('renders SystemProgram::CreateAccount instruction', async () => {
+    test('should render SystemProgram::CreateAccount instruction', async () => {
         // Setup search params mock
         const mockUseSearchParamsReturn = mockUseSearchParams(stubs.systemProgramCreateAccountQueryParam);
         vi.spyOn(await import('next/navigation'), 'useSearchParams').mockReturnValue(mockUseSearchParamsReturn as any);
@@ -158,11 +156,13 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
                 <ClusterProvider>
                     <TransactionsProvider>
                         <AccountsProvider>
-                            <TransactionInspectorPage showTokenBalanceChanges={false} />
+                            <InstructionParserProvider dispatcher={instructionParserDispatcher}>
+                                <TransactionInspectorPage showTokenBalanceChanges={false} />
+                            </InstructionParserProvider>
                         </AccountsProvider>
                     </TransactionsProvider>
                 </ClusterProvider>
-            </ScrollAnchorProvider>
+            </ScrollAnchorProvider>,
         );
 
         // Wait for initial and temporary elements to disappear separately
@@ -188,7 +188,7 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
         });
     });
 
-    test('renders SystemProgram::CreateAccountWithSeed instruction', async () => {
+    test('should render SystemProgram::CreateAccountWithSeed instruction', async () => {
         // Setup search params mock
         const mockUseSearchParamsReturn = mockUseSearchParams(stubs.systemProgramCreateAccountWithSeedQueryParam);
         vi.spyOn(await import('next/navigation'), 'useSearchParams').mockReturnValue(mockUseSearchParamsReturn as any);
@@ -198,11 +198,13 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
                 <ClusterProvider>
                     <TransactionsProvider>
                         <AccountsProvider>
-                            <TransactionInspectorPage showTokenBalanceChanges={false} />
+                            <InstructionParserProvider dispatcher={instructionParserDispatcher}>
+                                <TransactionInspectorPage showTokenBalanceChanges={false} />
+                            </InstructionParserProvider>
                         </AccountsProvider>
                     </TransactionsProvider>
                 </ClusterProvider>
-            </ScrollAnchorProvider>
+            </ScrollAnchorProvider>,
         );
 
         // Wait for initial and temporary elements to disappear separately
@@ -229,7 +231,7 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
         });
     });
 
-    test('renders SystemProgram::Allocate instruction', async () => {
+    test('should render SystemProgram::Allocate instruction', async () => {
         // Setup search params mock
         const mockUseSearchParamsReturn = mockUseSearchParams(stubs.systemProgramAllocateQueryParam);
         vi.spyOn(await import('next/navigation'), 'useSearchParams').mockReturnValue(mockUseSearchParamsReturn as any);
@@ -239,11 +241,13 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
                 <ClusterProvider>
                     <TransactionsProvider>
                         <AccountsProvider>
-                            <TransactionInspectorPage showTokenBalanceChanges={false} />
+                            <InstructionParserProvider dispatcher={instructionParserDispatcher}>
+                                <TransactionInspectorPage showTokenBalanceChanges={false} />
+                            </InstructionParserProvider>
                         </AccountsProvider>
                     </TransactionsProvider>
                 </ClusterProvider>
-            </ScrollAnchorProvider>
+            </ScrollAnchorProvider>,
         );
 
         // Wait for initial and temporary elements to disappear separately
@@ -265,7 +269,7 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
         });
     });
 
-    test('renders SystemProgram::Assign instruction', async () => {
+    test('should render SystemProgram::Assign instruction', async () => {
         // Setup search params mock
         const mockUseSearchParamsReturn = mockUseSearchParams(stubs.systemProgramAssignQueryParam);
         vi.spyOn(await import('next/navigation'), 'useSearchParams').mockReturnValue(mockUseSearchParamsReturn as any);
@@ -275,11 +279,13 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
                 <ClusterProvider>
                     <TransactionsProvider>
                         <AccountsProvider>
-                            <TransactionInspectorPage showTokenBalanceChanges={false} />
+                            <InstructionParserProvider dispatcher={instructionParserDispatcher}>
+                                <TransactionInspectorPage showTokenBalanceChanges={false} />
+                            </InstructionParserProvider>
                         </AccountsProvider>
                     </TransactionsProvider>
                 </ClusterProvider>
-            </ScrollAnchorProvider>
+            </ScrollAnchorProvider>,
         );
 
         // Wait for initial and temporary elements to disappear separately
@@ -299,7 +305,7 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
         });
     });
 
-    test('renders SystemProgram::Transfer instruction', async () => {
+    test('should render SystemProgram::Transfer instruction', async () => {
         // Setup search params mock
         const mockUseSearchParamsReturn = mockUseSearchParams(stubs.systemProgramTransferQueryParam);
         vi.spyOn(await import('next/navigation'), 'useSearchParams').mockReturnValue(mockUseSearchParamsReturn as any);
@@ -309,11 +315,13 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
                 <ClusterProvider>
                     <TransactionsProvider>
                         <AccountsProvider>
-                            <TransactionInspectorPage showTokenBalanceChanges={false} />
+                            <InstructionParserProvider dispatcher={instructionParserDispatcher}>
+                                <TransactionInspectorPage showTokenBalanceChanges={false} />
+                            </InstructionParserProvider>
                         </AccountsProvider>
                     </TransactionsProvider>
                 </ClusterProvider>
-            </ScrollAnchorProvider>
+            </ScrollAnchorProvider>,
         );
 
         // Wait for initial and temporary elements to disappear separately
@@ -336,7 +344,7 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
         });
     });
 
-    test('renders SystemProgram::AdvanceNonceAccount instruction', async () => {
+    test('should render SystemProgram::AdvanceNonceAccount instruction', async () => {
         // Setup search params mock
         const mockUseSearchParamsReturn = mockUseSearchParams(stubs.systemProgramAdvanceNonceQueryParam);
         vi.spyOn(await import('next/navigation'), 'useSearchParams').mockReturnValue(mockUseSearchParamsReturn as any);
@@ -346,11 +354,13 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
                 <ClusterProvider>
                     <TransactionsProvider>
                         <AccountsProvider>
-                            <TransactionInspectorPage showTokenBalanceChanges={false} />
+                            <InstructionParserProvider dispatcher={instructionParserDispatcher}>
+                                <TransactionInspectorPage showTokenBalanceChanges={false} />
+                            </InstructionParserProvider>
                         </AccountsProvider>
                     </TransactionsProvider>
                 </ClusterProvider>
-            </ScrollAnchorProvider>
+            </ScrollAnchorProvider>,
         );
 
         // Wait for initial and temporary elements to disappear separately
@@ -372,7 +382,7 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
         });
     });
 
-    test('renders SystemProgram::WithdrawNonceAccount instruction', async () => {
+    test('should render SystemProgram::WithdrawNonceAccount instruction', async () => {
         // Setup search params mock
         const mockUseSearchParamsReturn = mockUseSearchParams(stubs.systemProgramWithdrawNonceQueryParam);
         vi.spyOn(await import('next/navigation'), 'useSearchParams').mockReturnValue(mockUseSearchParamsReturn as any);
@@ -382,11 +392,13 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
                 <ClusterProvider>
                     <TransactionsProvider>
                         <AccountsProvider>
-                            <TransactionInspectorPage showTokenBalanceChanges={false} />
+                            <InstructionParserProvider dispatcher={instructionParserDispatcher}>
+                                <TransactionInspectorPage showTokenBalanceChanges={false} />
+                            </InstructionParserProvider>
                         </AccountsProvider>
                     </TransactionsProvider>
                 </ClusterProvider>
-            </ScrollAnchorProvider>
+            </ScrollAnchorProvider>,
         );
 
         // Wait for initial and temporary elements to disappear separately
@@ -410,7 +422,7 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
         });
     });
 
-    test('renders SystemProgram::AuthorizeNonceAccount instruction', async () => {
+    test('should render SystemProgram::AuthorizeNonceAccount instruction', async () => {
         // Setup search params mock
         const mockUseSearchParamsReturn = mockUseSearchParams(stubs.systemProgramAuthorizeNonceQueryParam);
         vi.spyOn(await import('next/navigation'), 'useSearchParams').mockReturnValue(mockUseSearchParamsReturn as any);
@@ -420,11 +432,13 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
                 <ClusterProvider>
                     <TransactionsProvider>
                         <AccountsProvider>
-                            <TransactionInspectorPage showTokenBalanceChanges={false} />
+                            <InstructionParserProvider dispatcher={instructionParserDispatcher}>
+                                <TransactionInspectorPage showTokenBalanceChanges={false} />
+                            </InstructionParserProvider>
                         </AccountsProvider>
                     </TransactionsProvider>
                 </ClusterProvider>
-            </ScrollAnchorProvider>
+            </ScrollAnchorProvider>,
         );
 
         // Wait for initial and temporary elements to disappear separately
@@ -447,7 +461,7 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
         });
     });
 
-    test('renders SystemProgram::InitializeNonceAccount instruction', async () => {
+    test('should render SystemProgram::InitializeNonceAccount instruction', async () => {
         // Setup search params mock
         const mockUseSearchParamsReturn = mockUseSearchParams(stubs.systemProgramInitializeNonceQueryParam);
         vi.spyOn(await import('next/navigation'), 'useSearchParams').mockReturnValue(mockUseSearchParamsReturn as any);
@@ -457,11 +471,13 @@ describe("TransactionInspectorPage with SystemProgram' instructions", () => {
                 <ClusterProvider>
                     <TransactionsProvider>
                         <AccountsProvider>
-                            <TransactionInspectorPage showTokenBalanceChanges={false} />
+                            <InstructionParserProvider dispatcher={instructionParserDispatcher}>
+                                <TransactionInspectorPage showTokenBalanceChanges={false} />
+                            </InstructionParserProvider>
                         </AccountsProvider>
                     </TransactionsProvider>
                 </ClusterProvider>
-            </ScrollAnchorProvider>
+            </ScrollAnchorProvider>,
         );
 
         // Wait for initial and temporary elements to disappear separately

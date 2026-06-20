@@ -2,12 +2,12 @@
 
 import { Epoch } from '@components/common/Epoch';
 import { ErrorCard } from '@components/common/ErrorCard';
-import { LoadingCard } from '@components/common/LoadingCard';
 import { Slot } from '@components/common/Slot';
 import { TableCardBody } from '@components/common/TableCardBody';
 import { TimestampToggle } from '@components/common/TimestampToggle';
 import { LiveTransactionStatsCard } from '@components/LiveTransactionStatsCard';
 import { StatsNotReady } from '@components/StatsNotReady';
+import { UpcomingFeatures } from '@features/feature-gate';
 import { useVoteAccounts } from '@providers/accounts/vote-accounts';
 import { useCluster } from '@providers/cluster';
 import { StatsProvider } from '@providers/stats';
@@ -23,21 +23,24 @@ import { abbreviatedNumber, lamportsToSol, slotsToHumanString } from '@utils/ind
 import { percentage } from '@utils/math';
 import React from 'react';
 
+import { Card, CardBody, CardHeader, CardTitle } from '@/app/shared/ui/Card';
+import { PageContainer } from '@/app/shared/ui/page-container/PageContainer';
+
 import { DeveloperResources } from './components/DeveloperResources';
-import { UpcomingFeatures } from './utils/feature-gate/UpcomingFeatures';
+import { SimpleCardSkeleton } from './components/shared/Skeletons';
 
 export default function Page() {
     return (
         <StatsProvider>
             <SupplyProvider>
-                <div className="container mt-4">
+                <PageContainer className="mt-4">
                     <StakingComponent />
 
-                    <div className="row d-flex">
-                        <div className="col-md-6 d-flex">
+                    <div className="flex flex-col lg:flex-row lg:gap-6">
+                        <div className="w-full lg:w-1/2">
                             <StatsCardBody />
                         </div>
-                        <div className="col-md-6 d-flex">
+                        <div className="w-full lg:w-1/2">
                             <LiveTransactionStatsCard />
                         </div>
                     </div>
@@ -45,11 +48,20 @@ export default function Page() {
                     <DeveloperResources />
 
                     <UpcomingFeatures />
-                </div>
+                </PageContainer>
             </SupplyProvider>
         </StatsProvider>
     );
 }
+
+const LoadingStatsCard = ({ title }: { title: string }) => {
+    return (
+        <div className="flex items-center gap-2">
+            <span className="spinner-grow spinner-grow-sm shrink-0" />
+            {title}
+        </div>
+    );
+};
 
 function StakingComponent() {
     const { status } = useCluster();
@@ -89,7 +101,12 @@ function StakingComponent() {
     }
 
     if (supply === Status.Idle || supply === Status.Connecting) {
-        return <LoadingCard message="Loading supply data" />;
+        return (
+            <div className="flex flex-col md:flex-row md:gap-6">
+                <SimpleCardSkeleton title={<LoadingStatsCard title="Loading supply data" />} />
+                <SimpleCardSkeleton title={<LoadingStatsCard title="Loading staking data" />} />
+            </div>
+        );
     } else if (typeof supply === 'string') {
         return <ErrorCard text={supply} retry={fetchData} />;
     }
@@ -108,37 +125,39 @@ function StakingComponent() {
     }
 
     return (
-        <div className="row staking-card">
-            <div className="col-6 col-xl">
-                <div className="card">
-                    <div className="card-body">
+        <div className="flex flex-col md:flex-row md:gap-6">
+            <div className="w-full md:w-1/2">
+                <Card ui="dashkit" className="mb-3 md:mb-6">
+                    <CardBody ui="dashkit">
                         <h4>Circulating Supply</h4>
-                        <h1>
-                            <em>{displayLamports(supply.circulating)}</em> /{' '}
-                            <small>{displayLamports(supply.total)}</small>
+                        <h1 className="mb-3">
+                            <em className="not-italic text-dark-accent">{displayLamports(supply.circulating)}</em> /{' '}
+                            <small className="text-base">{displayLamports(supply.total)}</small>
                         </h1>
-                        <h5>
-                            <em>{circulatingPercentage}%</em> is circulating
+                        <h5 className="mb-0">
+                            <em className="not-italic text-dark-accent">{circulatingPercentage}%</em> is circulating
                         </h5>
-                    </div>
-                </div>
+                    </CardBody>
+                </Card>
             </div>
-            <div className="col-6 col-xl">
-                <div className="card">
-                    <div className="card-body">
+            <div className="w-full md:w-1/2">
+                <Card ui="dashkit" className="mb-3 md:mb-6">
+                    <CardBody ui="dashkit">
                         <h4>Active Stake</h4>
                         {activeStake ? (
-                            <h1>
-                                <em>{displayLamports(activeStake)}</em> / <small>{displayLamports(supply.total)}</small>
+                            <h1 className="mb-3">
+                                <em className="not-italic text-dark-accent">{displayLamports(activeStake)}</em> /{' '}
+                                <small className="text-base">{displayLamports(supply.total)}</small>
                             </h1>
                         ) : null}
                         {delinquentStakePercentage && (
-                            <h5>
-                                Delinquent stake: <em>{delinquentStakePercentage}%</em>
+                            <h5 className="mb-0">
+                                Delinquent stake:{' '}
+                                <em className="not-italic text-dark-accent">{delinquentStakePercentage}%</em>
                             </h5>
                         )}
-                    </div>
-                </div>
+                    </CardBody>
+                </Card>
             </div>
         </div>
     );
@@ -169,65 +188,63 @@ function StatsCardBody() {
     const hourlySlotTime = Math.round(1000 * avgSlotTime_1h);
     const averageSlotTime = Math.round(1000 * avgSlotTime_1min);
     const { slotIndex, slotsInEpoch } = epochInfo;
-    const epochProgress = percentage(slotIndex, slotsInEpoch, 2).toFixed(1) + '%';
+    const epochProgress = `${percentage(slotIndex, slotsInEpoch, 2).toFixed(1)}%`;
     const epochTimeRemaining = slotsToHumanString(Number(slotsInEpoch - slotIndex), hourlySlotTime);
     const { blockHeight, absoluteSlot } = epochInfo;
 
     return (
-        <div className="card flex-grow-1">
-            <div className="card-header">
-                <div className="row align-items-center">
-                    <div className="col">
-                        <h4 className="card-header-title">Live Cluster Stats</h4>
-                    </div>
-                </div>
-            </div>
-            <TableCardBody>
+        <Card ui="dashkit" flex="grow" className="mb-3 md:mb-6">
+            <CardHeader ui="dashkit">
+                <CardTitle as="h4" ui="dashkit">
+                    Live Cluster Stats
+                </CardTitle>
+            </CardHeader>
+            <TableCardBody layout="expanded" className="[&_td:first-child]:!w-2/5 md:[&_td:first-child]:!w-auto">
                 <tr>
-                    <td className="w-100">Slot</td>
-                    <td className="text-lg-end font-monospace">
+                    <td className="w-full">Slot</td>
+                    <td className="text-right font-mono">
                         <Slot slot={absoluteSlot} link />
                     </td>
                 </tr>
                 {blockHeight !== undefined && (
                     <tr>
-                        <td className="w-100">Block height</td>
-                        <td className="text-lg-end font-monospace">
+                        <td className="w-full">Block height</td>
+                        <td className="text-right font-mono">
                             <Slot slot={blockHeight} />
                         </td>
                     </tr>
                 )}
                 {blockTime && (
                     <tr>
-                        <td className="w-100">Cluster time</td>
-                        <td className="text-lg-end font-monospace">
+                        <td className="w-full">Cluster time</td>
+                        <td className="text-right font-mono">
                             <TimestampToggle unixTimestamp={blockTime} shorter></TimestampToggle>
                         </td>
                     </tr>
                 )}
                 <tr>
-                    <td className="w-100">Slot time (1min average)</td>
-                    <td className="text-lg-end font-monospace">{averageSlotTime}ms</td>
+                    <td className="w-full">Slot time (1min average)</td>
+                    <td className="text-right font-mono">{averageSlotTime}ms</td>
                 </tr>
                 <tr>
-                    <td className="w-100">Slot time (1hr average)</td>
-                    <td className="text-lg-end font-monospace">{hourlySlotTime}ms</td>
+                    <td className="w-full">Slot time (1hr average)</td>
+                    <td className="text-right font-mono">{hourlySlotTime}ms</td>
                 </tr>
                 <tr>
-                    <td className="w-100">Epoch</td>
-                    <td className="text-lg-end font-monospace">
+                    <td className="w-full">Epoch</td>
+                    <td className="text-right font-mono">
                         <Epoch epoch={epochInfo.epoch} link />
                     </td>
                 </tr>
                 <tr>
-                    <td className="w-100">Epoch progress</td>
-                    <td className="text-lg-end font-monospace">{epochProgress}</td>
+                    <td className="w-full">Epoch progress</td>
+                    <td className="text-right font-mono">{epochProgress}</td>
                 </tr>
                 <tr>
-                    <td className="w-100">Epoch time remaining (approx.)</td>
-                    <td className="text-lg-end font-monospace">~{epochTimeRemaining}</td>
+                    <td className="w-full">Epoch time remaining (approx.)</td>
+                    <td className="text-right font-mono">~{epochTimeRemaining}</td>
                 </tr>
             </TableCardBody>
-        </div>
+        </Card>
     );
 }

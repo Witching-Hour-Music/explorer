@@ -8,6 +8,9 @@ import {
 import bs58 from 'bs58';
 import React from 'react';
 
+import { readUint8, readUint16LE, toBase64 } from '@/app/shared/lib/bytes';
+import { BaseTable } from '@/app/shared/ui/Table';
+
 import { Address } from '../../common/Address';
 import { Copyable } from '../../common/Copyable';
 import { InstructionCard } from '../InstructionCard';
@@ -35,21 +38,21 @@ interface Ed25519SignatureOffsets {
 }
 
 // See https://docs.anza.xyz/runtime/programs/#ed25519-program
-function decodeEd25519Instruction(data: Buffer): Ed25519SignatureOffsets[] {
-    const count = data.readUInt8(0);
+function decodeEd25519Instruction(data: Uint8Array): Ed25519SignatureOffsets[] {
+    const count = readUint8(data, 0);
     const offsets: Ed25519SignatureOffsets[] = [];
 
     let cursor = 2; // Skip count and padding byte
 
     for (let i = 0; i < count; i++) {
         const offset: Ed25519SignatureOffsets = {
-            messageDataOffset: data.readUInt16LE(cursor + 8),
-            messageDataSize: data.readUInt16LE(cursor + 10),
-            messageInstructionIndex: data.readUInt16LE(cursor + 12),
-            publicKeyInstructionIndex: data.readUInt16LE(cursor + 6),
-            publicKeyOffset: data.readUInt16LE(cursor + 4),
-            signatureInstructionIndex: data.readUInt16LE(cursor + 2),
-            signatureOffset: data.readUInt16LE(cursor),
+            messageDataOffset: readUint16LE(data, cursor + 8),
+            messageDataSize: readUint16LE(data, cursor + 10),
+            messageInstructionIndex: readUint16LE(data, cursor + 12),
+            publicKeyInstructionIndex: readUint16LE(data, cursor + 6),
+            publicKeyOffset: readUint16LE(data, cursor + 4),
+            signatureInstructionIndex: readUint16LE(data, cursor + 2),
+            signatureOffset: readUint16LE(data, cursor),
         };
         offsets.push(offset);
         cursor += 14; // Number of bytes in one Ed25519SignatureOffsets struct
@@ -61,9 +64,9 @@ function decodeEd25519Instruction(data: Buffer): Ed25519SignatureOffsets[] {
 const extractData = (
     tx: ParsedTransaction,
     instructionIndex: number,
-    sourceData: Buffer,
+    sourceData: Uint8Array,
     dataOffset: number,
-    dataLength: number
+    dataLength: number,
 ): Uint8Array | null => {
     if (instructionIndex === ED25519_SELF_REFERENCE_INSTRUCTION_INDEX) {
         return sourceData.slice(dataOffset, dataOffset + dataLength);
@@ -72,7 +75,7 @@ const extractData = (
     const targetIx = tx.message.instructions[instructionIndex] as PartiallyDecodedInstruction;
     try {
         return bs58.decode(targetIx.data).slice(dataOffset, dataOffset + dataLength);
-    } catch (err) {
+    } catch (_err) {
         return null;
     }
 };
@@ -91,12 +94,12 @@ export function Ed25519DetailsCard(props: DetailsProps) {
             innerCards={innerCards}
             childIndex={childIndex}
         >
-            <tr>
-                <td>Program</td>
-                <td className="text-lg-end">
+            <BaseTable.Row>
+                <BaseTable.Cell>Program</BaseTable.Cell>
+                <BaseTable.Cell className="text-right">
                     <Address pubkey={ED25519_PROGRAM_ID} alignRight link />
-                </td>
-            </tr>
+                </BaseTable.Cell>
+            </BaseTable.Row>
 
             {offsets.map((offset, index) => {
                 const signature = extractData(
@@ -104,7 +107,7 @@ export function Ed25519DetailsCard(props: DetailsProps) {
                     offset.signatureInstructionIndex,
                     ix.data,
                     offset.signatureOffset,
-                    64
+                    64,
                 );
 
                 const pubkey = extractData(tx, offset.publicKeyInstructionIndex, ix.data, offset.publicKeyOffset, 32);
@@ -114,74 +117,72 @@ export function Ed25519DetailsCard(props: DetailsProps) {
                     offset.messageInstructionIndex,
                     ix.data,
                     offset.messageDataOffset,
-                    offset.messageDataSize
+                    offset.messageDataSize,
                 );
 
                 return (
                     <React.Fragment key={index}>
-                        <tr className="table-sep">
-                            <td colSpan={2} className="text-lg-start" align="left">
+                        <BaseTable.Row className="bg-dark-background text-dk-xs font-semibold uppercase tracking-[0.08em] text-dark-muted-foreground">
+                            <BaseTable.Cell colSpan={2} className="lg:text-left" align="left">
                                 Signature #{index + 1}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Signature Reference</td>
-                            <td className="text-lg-end">
+                            </BaseTable.Cell>
+                        </BaseTable.Row>
+                        <BaseTable.Row>
+                            <BaseTable.Cell>Signature Reference</BaseTable.Cell>
+                            <BaseTable.Cell className="text-right">
                                 {offset.signatureInstructionIndex === ED25519_SELF_REFERENCE_INSTRUCTION_INDEX
                                     ? 'This instruction'
                                     : `Instruction ${offset.signatureInstructionIndex}`}
                                 {', '}
                                 Offset {offset.signatureOffset}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Signature</td>
-                            <td className="text-lg-end">
+                            </BaseTable.Cell>
+                        </BaseTable.Row>
+                        <BaseTable.Row>
+                            <BaseTable.Cell>Signature</BaseTable.Cell>
+                            <BaseTable.Cell className="text-right">
                                 {signature ? (
-                                    <Copyable text={Buffer.from(signature).toString('base64')}>
-                                        <span className="font-monospace">
-                                            {Buffer.from(signature).toString('base64')}
-                                        </span>
+                                    <Copyable text={toBase64(signature)}>
+                                        <span className="font-mono">{toBase64(signature)}</span>
                                     </Copyable>
                                 ) : (
                                     'Invalid reference'
                                 )}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Public Key Reference</td>
-                            <td className="text-lg-end">
+                            </BaseTable.Cell>
+                        </BaseTable.Row>
+                        <BaseTable.Row>
+                            <BaseTable.Cell>Public Key Reference</BaseTable.Cell>
+                            <BaseTable.Cell className="text-right">
                                 {offset.publicKeyInstructionIndex === ED25519_SELF_REFERENCE_INSTRUCTION_INDEX
                                     ? 'This instruction'
                                     : `Instruction ${offset.publicKeyInstructionIndex}`}
                                 {', '}
                                 Offset {offset.publicKeyOffset}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Public Key</td>
-                            <td className="text-lg-end">
+                            </BaseTable.Cell>
+                        </BaseTable.Row>
+                        <BaseTable.Row>
+                            <BaseTable.Cell>Public Key</BaseTable.Cell>
+                            <BaseTable.Cell className="text-right">
                                 {pubkey ? (
                                     <Address pubkey={new PublicKey(pubkey)} alignRight link />
                                 ) : (
                                     'Invalid reference'
                                 )}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Message Reference</td>
-                            <td className="text-lg-end">
+                            </BaseTable.Cell>
+                        </BaseTable.Row>
+                        <BaseTable.Row>
+                            <BaseTable.Cell>Message Reference</BaseTable.Cell>
+                            <BaseTable.Cell className="text-right">
                                 {offset.messageInstructionIndex === ED25519_SELF_REFERENCE_INSTRUCTION_INDEX
                                     ? 'This instruction'
                                     : `Instruction ${offset.messageInstructionIndex}`}
                                 {', '}
                                 Offset {offset.messageDataOffset}, Size {offset.messageDataSize}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Message</td>
-                            <td
-                                className="text-lg-end"
+                            </BaseTable.Cell>
+                        </BaseTable.Row>
+                        <BaseTable.Row>
+                            <BaseTable.Cell>Message</BaseTable.Cell>
+                            <BaseTable.Cell
+                                className="text-right"
                                 style={{
                                     fontSize: '0.85rem',
                                     lineHeight: '1.2',
@@ -192,16 +193,14 @@ export function Ed25519DetailsCard(props: DetailsProps) {
                                 }}
                             >
                                 {message ? (
-                                    <Copyable text={Buffer.from(message).toString('base64')}>
-                                        <span className="font-monospace">
-                                            {Buffer.from(message).toString('base64')}
-                                        </span>
+                                    <Copyable text={toBase64(message)}>
+                                        <span className="font-mono">{toBase64(message)}</span>
                                     </Copyable>
                                 ) : (
                                     'Invalid reference'
                                 )}
-                            </td>
-                        </tr>
+                            </BaseTable.Cell>
+                        </BaseTable.Row>
                     </React.Fragment>
                 );
             })}

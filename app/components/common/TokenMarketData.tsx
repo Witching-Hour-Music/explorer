@@ -1,18 +1,12 @@
 import { LoadingCard } from '@components/shared/LoadingCard';
-import { CoinGeckoResult, CoingeckoStatus, CoinInfo } from '@utils/coingecko';
 import { useRef } from 'react';
 
-import { FullLegacyTokenInfo, FullTokenInfo } from '@/app/utils/token-info';
+import { cn } from '@/app/components/shared/utils';
+import { type CoinGeckoResult, CoingeckoStatus, type CoinInfo } from '@/app/features/token-verification-badge';
 
 import { MarketData } from './token-market-data/MarketData';
 
-export function TokenMarketData({
-    coinInfo,
-    tokenInfo,
-}: {
-    coinInfo?: CoinGeckoResult;
-    tokenInfo?: FullTokenInfo | FullLegacyTokenInfo;
-}) {
+export function TokenMarketData({ coinInfo }: { coinInfo?: CoinGeckoResult }) {
     const tokenPriceInfo = useRef<CoinInfo | undefined>(undefined);
     const tokenPriceDecimals = useRef<number>(2);
 
@@ -23,13 +17,18 @@ export function TokenMarketData({
         }
     }
 
-    const isLoadingFromCoingecko =
-        Boolean(tokenInfo?.extensions?.coingeckoId) && coinInfo?.status === CoingeckoStatus.Loading;
+    const isLoadingFromCoingecko = coinInfo?.status === CoingeckoStatus.Loading;
 
     return (
         <>
             {isLoadingFromCoingecko && (
-                <LoadingCard className="e-mb-0 e-px-3 e-py-4" message="Loading token price data" />
+                <LoadingCard
+                    className={cn(
+                        'm-0 grid w-full place-items-center rounded border border-solid border-black bg-[#1C2120] px-2 py-1 text-sm',
+                        'md:min-h-[69px]',
+                    )}
+                    message="Loading token price data"
+                />
             )}
             {!isLoadingFromCoingecko && tokenPriceInfo.current && (
                 <MarketData.Series

@@ -3,6 +3,7 @@
 import { Idl, Program } from '@coral-xyz/anchor';
 import { useMemo } from 'react';
 
+import { Logger } from '@/app/shared/lib/logger';
 import { Cluster } from '@/app/utils/cluster';
 
 import { formatSerdeIdl, getFormattedIdl } from './formatters/format';
@@ -11,12 +12,11 @@ import { getProvider, useIdlFromAnchorProgramSeed } from './use-idl-from-anchor-
 export function useAnchorProgram(
     programAddress: string,
     url: string,
-    cluster?: Cluster
-): { program: Program | null; idl: Idl | null } {
+    cluster?: Cluster,
+): { program: Program | null; idl: Idl | null; isLoading: boolean } {
     // TODO(ngundotra): Rewrite this to be more efficient
     // const idlFromBinary = useIdlFromSolanaProgramBinary(programAddress);
-    const idlFromAnchorProgram = useIdlFromAnchorProgramSeed(programAddress, url, cluster);
-    const idl = idlFromAnchorProgram;
+    const { idl, isLoading } = useIdlFromAnchorProgramSeed(programAddress, url, cluster);
     const program: Program<Idl> | null = useMemo(() => {
         if (!idl) return null;
 
@@ -24,12 +24,12 @@ export function useAnchorProgram(
             const program = new Program(getFormattedIdl(formatSerdeIdl, idl, programAddress), getProvider(url));
             return program;
         } catch (e) {
-            console.error('Error creating anchor program for', programAddress, e, { idl });
+            Logger.error(new Error('[idl] Error creating anchor program', { cause: e }), { idl, programAddress });
             return null;
         }
     }, [idl, programAddress, url]);
 
-    return { idl, program };
+    return { idl, isLoading, program };
 }
 
 export type AnchorAccount = {

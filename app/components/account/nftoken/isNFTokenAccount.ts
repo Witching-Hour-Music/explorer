@@ -1,5 +1,9 @@
 import { PublicKey } from '@solana/web3.js';
 
+import { toBase64 } from '@/app/shared/lib/bytes';
+import { invariant } from '@/app/shared/lib/invariant';
+import { Logger } from '@/app/shared/lib/logger';
+
 import { Account } from '../../../providers/accounts';
 import { NFTOKEN_ADDRESS } from './nftoken';
 import { NftokenTypes } from './nftoken-types';
@@ -16,13 +20,14 @@ export const parseNFTokenNFTAccount = (account: Account): NftokenTypes.NftAccoun
     }
 
     try {
-        const parsed = NftokenTypes.nftAccountLayout.decode(account.data.raw!);
+        invariant(account.data.raw, 'isNFTokenAccount guarantees raw account data');
+        const parsed = NftokenTypes.nftAccountLayout.decode(account.data.raw);
 
         if (!parsed) {
             return null;
         }
 
-        if (Buffer.from(parsed!.discriminator).toString('base64') !== nftokenAccountDisc) {
+        if (toBase64(new Uint8Array(parsed.discriminator)) !== nftokenAccountDisc) {
             return null;
         }
 
@@ -39,7 +44,7 @@ export const parseNFTokenNFTAccount = (account: Account): NftokenTypes.NftAccoun
             metadata_url: parsed.metadata_url?.replace(/\0/g, '') ?? null,
         };
     } catch (e) {
-        console.error('Problem parsing NFToken NFT...', e);
+        Logger.error(e);
         return null;
     }
 };
@@ -51,12 +56,13 @@ export const parseNFTokenCollectionAccount = (account: Account): NftokenTypes.Co
     }
 
     try {
-        const parsed = NftokenTypes.collectionAccountLayout.decode(account.data.raw!);
+        invariant(account.data.raw, 'isNFTokenAccount guarantees raw account data');
+        const parsed = NftokenTypes.collectionAccountLayout.decode(account.data.raw);
 
         if (!parsed) {
             return null;
         }
-        if (Buffer.from(parsed.discriminator).toString('base64') !== collectionAccountDisc) {
+        if (toBase64(new Uint8Array(parsed.discriminator)) !== collectionAccountDisc) {
             return null;
         }
 
@@ -68,7 +74,7 @@ export const parseNFTokenCollectionAccount = (account: Account): NftokenTypes.Co
             metadata_url: parsed.metadata_url?.replace(/\0/g, '') ?? null,
         };
     } catch (e) {
-        console.error('Problem parsing NFToken Collection...', e);
+        Logger.error(e);
         return null;
     }
 };

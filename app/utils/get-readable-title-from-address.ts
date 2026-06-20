@@ -3,20 +3,18 @@ import { Cluster } from '@utils/cluster';
 import { getTokenInfo } from '@/app/entities/token-info';
 
 export type AddressPageMetadataProps = Readonly<{
-    params: {
+    params: Promise<{
         address: string;
-    };
-    searchParams: {
+    }>;
+    searchParams: Promise<{
         cluster: string;
         customUrl?: string;
-    };
+    }>;
 }>;
 
 export default async function getReadableTitleFromAddress(props: AddressPageMetadataProps): Promise<string> {
-    const {
-        params: { address },
-        searchParams: { cluster: clusterParam },
-    } = props;
+    const { address } = await props.params;
+    const { cluster: clusterParam } = await props.searchParams;
 
     let cluster: Cluster;
     switch (clusterParam) {
@@ -39,7 +37,7 @@ export default async function getReadableTitleFromAddress(props: AddressPageMeta
         if (tokenName == null) {
             return address;
         }
-        const tokenDisplayAddress = address.slice(0, 2) + '\u2026' + address.slice(-2);
+        const tokenDisplayAddress = `${address.slice(0, 2)}\u2026${address.slice(-2)}`;
         return `Token | ${tokenName} (${tokenDisplayAddress})`;
     } catch {
         return address;

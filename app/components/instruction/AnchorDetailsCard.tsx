@@ -18,6 +18,11 @@ import { extractEventsFromLogs } from '@utils/program-logs';
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, CornerDownRight } from 'react-feather';
 
+import { Badge } from '@/app/components/shared/ui/badge';
+import { toBase64 } from '@/app/shared/lib/bytes';
+import { invariant } from '@/app/shared/lib/invariant';
+import { BaseTable } from '@/app/shared/ui/Table';
+
 import { InstructionCard } from './InstructionCard';
 import { ProgramEventsCard } from './ProgramEventsCard';
 
@@ -74,17 +79,18 @@ function AnchorDetails({ ix, anchorProgram }: { ix: TransactionInstruction; anch
         let ixDef: IdlInstruction | undefined;
         if (anchorProgram) {
             let coder: BorshInstructionCoder | BorshEventCoder;
+            const encodedInstructionData = toBase64(ix.data.slice(8));
             if (instructionIsSelfCPI(ix.data)) {
                 // Try custom discriminator decoder first (handles variable-length discriminators)
-                decodedIxData = decodeEventWithCustomDiscriminator(ix.data.slice(8).toString('base64'), anchorProgram);
+                decodedIxData = decodeEventWithCustomDiscriminator(encodedInstructionData, anchorProgram);
 
                 // Fallback to standard Anchor event decoder
                 if (!decodedIxData) {
                     coder = new BorshEventCoder(anchorProgram.idl);
-                    decodedIxData = coder.decode(ix.data.slice(8).toString('base64'));
+                    decodedIxData = coder.decode(encodedInstructionData);
                 }
                 const ixEventDef = anchorProgram.idl.events?.find(
-                    ixDef => ixDef.name === decodedIxData?.name
+                    ixDef => ixDef.name === decodedIxData?.name,
                 ) as IdlEvent;
 
                 const ixEventFields = anchorProgram.idl.types?.find((type: any) => type.name === ixEventDef.name);
@@ -141,11 +147,11 @@ function AnchorDetails({ ix, anchorProgram }: { ix: TransactionInstruction; anch
 
     if (!ixAccounts || !decodedIxData || !ixDef) {
         return (
-            <tr>
-                <td colSpan={3} className="text-lg-center">
+            <BaseTable.Row>
+                <BaseTable.Cell colSpan={3} className="lg:text-center">
                     Failed to decode account data according to the public Anchor interface
-                </td>
-            </tr>
+                </BaseTable.Cell>
+            </BaseTable.Row>
         );
     }
 
@@ -165,18 +171,18 @@ function AnchorDetails({ ix, anchorProgram }: { ix: TransactionInstruction; anch
 
     return (
         <>
-            <tr>
-                <td>Program</td>
-                <td className="text-lg-end" colSpan={2}>
+            <BaseTable.Row>
+                <BaseTable.Cell>Program</BaseTable.Cell>
+                <BaseTable.Cell className="text-right" colSpan={2}>
                     <Address pubkey={ix.programId} alignRight link raw overrideText={programName} />
-                </td>
-            </tr>
-            <tr className="table-sep">
-                <td>Account Name</td>
-                <td className="text-lg-end" colSpan={2}>
+                </BaseTable.Cell>
+            </BaseTable.Row>
+            <BaseTable.Row className="bg-dark-background text-dk-xs font-semibold uppercase tracking-[0.08em] text-dark-muted-foreground">
+                <BaseTable.Cell>Account Name</BaseTable.Cell>
+                <BaseTable.Cell className="text-right" colSpan={2}>
                     Address
-                </td>
-            </tr>
+                </BaseTable.Cell>
+            </BaseTable.Row>
             {(() => {
                 const rows: JSX.Element[] = [];
                 let skipUntilLevel: number | null = null;
@@ -208,27 +214,32 @@ function AnchorDetails({ ix, anchorProgram }: { ix: TransactionInstruction; anch
                                 // Render group header
                                 const groupHeaderIndex = accountInfoIndex;
                                 const isExpanded = !collapsedGroups.has(groupHeaderIndex);
-                                skipUntilLevel = isExpanded ? null : currentInfo.nestingLevel ?? 0;
+                                skipUntilLevel = isExpanded ? null : (currentInfo.nestingLevel ?? 0);
 
                                 rows.push(
-                                    <tr key={`group-${groupHeaderIndex}`} className="table-group-header">
-                                        <td colSpan={2}>{camelToTitleCase(currentInfo.name)}</td>
-                                        <td className="text-lg-end" onClick={() => toggleGroup(groupHeaderIndex)}>
-                                            <div className="c-pointer">
+                                    <BaseTable.Row key={`group-${groupHeaderIndex}`}>
+                                        <BaseTable.Cell colSpan={2}>
+                                            {camelToTitleCase(currentInfo.name)}
+                                        </BaseTable.Cell>
+                                        <BaseTable.Cell
+                                            className="text-right"
+                                            onClick={() => toggleGroup(groupHeaderIndex)}
+                                        >
+                                            <div className="cursor-pointer">
                                                 {isExpanded ? (
                                                     <>
-                                                        <span className="text-info me-2">Collapse</span>
+                                                        <span className="mr-1.5 text-dk-info">Collapse</span>
                                                         <ChevronUp size={15} />
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <span className="text-info me-2">Expand</span>
+                                                        <span className="mr-1.5 text-dk-info">Expand</span>
                                                         <ChevronDown size={15} />
                                                     </>
                                                 )}
                                             </div>
-                                        </td>
-                                    </tr>
+                                        </BaseTable.Cell>
+                                    </BaseTable.Row>,
                                 );
                                 accountInfoIndex++;
                             } else {
@@ -239,8 +250,12 @@ function AnchorDetails({ ix, anchorProgram }: { ix: TransactionInstruction; anch
                     }
 
                     // Get the account info for this actual account
-                    const accountInfo =
-                        accountMap.has(keyIndex) && ixAccounts ? ixAccounts[accountMap.get(keyIndex)!] : null;
+                    let accountInfo: FlattenedIdlAccount | null = null;
+                    if (accountMap.has(keyIndex) && ixAccounts) {
+                        const mappedIndex = accountMap.get(keyIndex);
+                        invariant(mappedIndex !== undefined, 'accountMap.has(keyIndex) guarantees the mapped index');
+                        accountInfo = ixAccounts[mappedIndex];
+                    }
 
                     // Skip nested accounts if parent group is collapsed
                     if (
@@ -262,25 +277,33 @@ function AnchorDetails({ ix, anchorProgram }: { ix: TransactionInstruction; anch
                     }
 
                     rows.push(
-                        <tr key={keyIndex} className={accountInfo?.isNested ? 'table-nested-account' : ''}>
-                            <td>
-                                <div className="d-flex flex-row align-items-center">
-                                    {accountInfo?.isNested && <CornerDownRight className="me-2 mb-1" size={14} />}
-                                    <div className="me-2 d-md-inline">
+                        <BaseTable.Row key={keyIndex} className={accountInfo?.isNested ? 'bg-black/20' : ''}>
+                            <BaseTable.Cell>
+                                <div className="flex flex-row items-center">
+                                    {accountInfo?.isNested && <CornerDownRight className="mb-[3px] mr-1.5" size={14} />}
+                                    <div className="mr-1.5 md:inline">
                                         {accountInfo
                                             ? `${camelToTitleCase(accountInfo.name)}`
                                             : ixAccounts
-                                            ? `Remaining Account #${keyIndex + 1 - actualAccountCount}`
-                                            : `Account #${keyIndex + 1}`}
+                                              ? `Remaining Account #${keyIndex + 1 - actualAccountCount}`
+                                              : `Account #${keyIndex + 1}`}
                                     </div>
-                                    {isWritable && <span className="badge bg-danger-soft me-1">Writable</span>}
-                                    {isSigner && <span className="badge bg-info-soft me-1">Signer</span>}
+                                    {isWritable && (
+                                        <Badge ui="dashkit" variant="destructive" className="mr-[3px]">
+                                            Writable
+                                        </Badge>
+                                    )}
+                                    {isSigner && (
+                                        <Badge ui="dashkit" variant="info" className="mr-[3px]">
+                                            Signer
+                                        </Badge>
+                                    )}
                                 </div>
-                            </td>
-                            <td className="text-lg-end" colSpan={2}>
+                            </BaseTable.Cell>
+                            <BaseTable.Cell className="text-right" colSpan={2}>
                                 <Address pubkey={pubkey} alignRight link />
-                            </td>
-                        </tr>
+                            </BaseTable.Cell>
+                        </BaseTable.Row>,
                     );
 
                     accountInfoIndex++;
@@ -291,11 +314,11 @@ function AnchorDetails({ ix, anchorProgram }: { ix: TransactionInstruction; anch
 
             {decodedIxData && ixDef && ixDef.args.length > 0 && (
                 <>
-                    <tr className="table-sep">
-                        <td>Argument Name</td>
-                        <td>Type</td>
-                        <td className="text-lg-end">Value</td>
-                    </tr>
+                    <BaseTable.Row className="bg-dark-background text-dk-xs font-semibold uppercase tracking-[0.08em] text-dark-muted-foreground">
+                        <BaseTable.Cell>Argument Name</BaseTable.Cell>
+                        <BaseTable.Cell>Type</BaseTable.Cell>
+                        <BaseTable.Cell className="text-right">Value</BaseTable.Cell>
+                    </BaseTable.Row>
                     {mapIxArgsToRows(decodedIxData.data, ixDef, anchorProgram.idl)}
                 </>
             )}

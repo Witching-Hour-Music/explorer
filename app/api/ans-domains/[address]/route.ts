@@ -1,17 +1,20 @@
 import { fetchAnsDomains } from '@entities/domain/api/fetch-ans-domains';
 import { PublicKey } from '@solana/web3.js';
-import Logger from '@utils/logger';
 import { NextResponse } from 'next/server';
+
+import { Logger } from '@/app/shared/lib/logger';
 
 const CACHE_HEADERS = { 'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=3600' };
 
 type Params = {
-    params: {
+    params: Promise<{
         address: string;
-    };
+    }>;
 };
 
-export async function GET(_request: Request, { params: { address } }: Params) {
+export async function GET(_request: Request, props: Params) {
+    const { address } = await props.params;
+
     try {
         new PublicKey(address);
     } catch {
@@ -22,7 +25,10 @@ export async function GET(_request: Request, { params: { address } }: Params) {
         const domains = await fetchAnsDomains(address);
         return NextResponse.json({ domains }, { headers: CACHE_HEADERS });
     } catch (error) {
-        Logger.error(error, `Failed to fetch ANS domains for ${address}`);
-        return NextResponse.json({ domains: [] }, { headers: { 'Cache-Control': 'no-store' } });
+        // RPC failure means the request fundamentally failed — escalate to Sentry.
+        Logger.panic(new Error('[api:ans-domains] Failed to fetch ANS domains', { cause: error }), {
+            sentryExtras: { address },
+        });
+        return NextResponse.json({ domains: [] }, { headers: { 'Cache-Control': 'no-store' }, status: 500 });
     }
 }

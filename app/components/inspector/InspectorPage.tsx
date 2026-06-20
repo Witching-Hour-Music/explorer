@@ -1,6 +1,5 @@
 'use client';
 
-import { DownloadableDropdown } from '@components/common/Downloadable';
 import { ErrorCard } from '@components/common/ErrorCard';
 import { LoadingCard } from '@components/common/LoadingCard';
 import { SolBalance } from '@components/common/SolBalance';
@@ -10,15 +9,29 @@ import { useFetchAccountInfo } from '@providers/accounts';
 import { FetchStatus } from '@providers/cache';
 import { useFetchRawTransaction, useRawTransactionDetails } from '@providers/transactions/raw';
 import usePrevious from '@react-hook/previous';
-import { Connection, MessageV0, PACKET_DATA_SIZE, PublicKey, VersionedMessage } from '@solana/web3.js';
+import {
+    type CompiledInnerInstruction,
+    Connection,
+    MessageV0,
+    PACKET_DATA_SIZE,
+    PublicKey,
+    VersionedMessage,
+} from '@solana/web3.js';
 import { generated, PROGRAM_ADDRESS as SQUADS_V4_PROGRAM_ADDRESS } from '@sqds/multisig';
-import { useClusterPath } from '@utils/url';
 import bs58 from 'bs58';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import React from 'react';
 import useSWR from 'swr';
 
+import { Badge } from '@/app/components/shared/ui/badge';
+import { Button } from '@/app/components/shared/ui/button';
 import { useCluster } from '@/app/providers/cluster';
+import { DownloadDropdown } from '@/app/shared/components/DownloadDropdown';
+import { toBase64 } from '@/app/shared/lib/bytes';
+import { Card, CardHeader, CardTitle } from '@/app/shared/ui/Card';
+import { PageContainer } from '@/app/shared/ui/page-container/PageContainer';
+import { BaseTable } from '@/app/shared/ui/Table';
+import { useClusterPath } from '@/app/utils/url';
 
 import { AccountsCard } from './AccountsCard';
 import { AddressTableLookupsCard } from './AddressTableLookupsCard';
@@ -32,11 +45,12 @@ const { VaultTransaction } = generated;
 export type TransactionData = {
     rawMessage: Uint8Array;
     message: VersionedMessage;
-    signatures?: (string | null)[];
+    signatures?: (string | undefined)[];
     accountBalances?: {
         preBalances: number[];
         postBalances: number[];
     };
+    compiledInnerInstructions?: CompiledInnerInstruction[];
 };
 
 export type SquadsProposalAccountData = {
@@ -56,17 +70,17 @@ function decodeParam(params: URLSearchParams, name: string): string | boolean {
     if (param === null) return false;
     try {
         return decodeURIComponent(param);
-    } catch (err) {
+    } catch (_err) {
         return true;
     }
 }
 
 // Decode a signatures param and throw an error on failure
-function decodeSignatures(signaturesParam: string): (string | null)[] {
+function decodeSignatures(signaturesParam: string): (string | undefined)[] {
     let signatures;
     try {
         signatures = JSON.parse(signaturesParam);
-    } catch (err) {
+    } catch (_err) {
         throw new Error('Signatures param is not valid JSON');
     }
 
@@ -74,10 +88,10 @@ function decodeSignatures(signaturesParam: string): (string | null)[] {
         throw new Error('Signatures param is not a JSON array');
     }
 
-    const validSignatures: (string | null)[] = [];
+    const validSignatures: (string | undefined)[] = [];
     for (const signature of signatures) {
-        if (signature === null) {
-            validSignatures.push(signature);
+        if (signature === null || signature === undefined) {
+            validSignatures.push(undefined);
             continue;
         }
 
@@ -88,7 +102,7 @@ function decodeSignatures(signaturesParam: string): (string | null)[] {
         try {
             bs58.decode(signature);
             validSignatures.push(signature);
-        } catch (err) {
+        } catch (_err) {
             throw new Error('Signature is not valid base58');
         }
     }
@@ -100,7 +114,7 @@ function decodeSignatures(signaturesParam: string): (string | null)[] {
 // URL params are returned as a string that will prefill the transaction
 // message input field for debugging. Returns a tuple of [result, shouldRefreshUrl]
 function decodeUrlParams(
-    params: URLSearchParams
+    params: URLSearchParams,
 ): [TransactionData | string | SquadsProposalAccountData, URLSearchParams, boolean] {
     const messageParam = decodeParam(params, 'message');
     const signaturesParam = decodeParam(params, 'signatures');
@@ -118,7 +132,7 @@ function decodeUrlParams(
             // Validate that it's a valid public key
             new PublicKey(squadsTxParam);
             return [{ account: squadsTxParam }, params, refreshUrl];
-        } catch (err) {
+        } catch (_err) {
             params.delete('squadsTx');
             refreshUrl = true;
         }
@@ -133,11 +147,11 @@ function decodeUrlParams(
         return ['', params, refreshUrl];
     }
 
-    let signatures: (string | null)[] | undefined = undefined;
+    let signatures: (string | undefined)[] | undefined = undefined;
     if (typeof signaturesParam === 'string') {
         try {
             signatures = decodeSignatures(signaturesParam);
-        } catch (err) {
+        } catch (_err) {
             params.delete('signatures');
             refreshUrl = true;
         }
@@ -157,7 +171,7 @@ function decodeUrlParams(
             signatures,
         };
         return [data, params, refreshUrl];
-    } catch (err) {
+    } catch (_err) {
         params.delete('message');
         refreshUrl = true;
         return [messageParam, params, true];
@@ -224,7 +238,7 @@ function SquadsProposalInspectorCard({ account, onClear }: { account: string; on
             })),
             compiledInstructions: message.instructions.map(instruction => ({
                 accountKeyIndexes: Array.from(instruction.accountIndexes),
-                data: Buffer.from(instruction.data),
+                data: instruction.data,
                 programIdIndex: instruction.programIdIndex,
             })),
             header: {
@@ -268,6 +282,7 @@ export function TransactionInspectorPage({
     const currentSearchParams = useSearchParams();
     const currentPathname = usePathname();
     const router = useRouter();
+    const inspectorPath = useClusterPath({ pathname: '/tx/inspector' });
     const [paramString, setParamString] = React.useState<string>();
 
     // Sync message with url search params
@@ -297,7 +312,7 @@ export function TransactionInspectorPage({
                 }
             }
 
-            const base64 = btoa(String.fromCharCode.apply(null, Array.from(inspectorData.rawMessage)));
+            const base64 = toBase64(inspectorData.rawMessage);
             const newParam = encodeURIComponent(base64);
             if (currentSearchParams.get('message') !== newParam) {
                 nextQueryParams ||= new URLSearchParams(currentSearchParams?.toString());
@@ -310,7 +325,7 @@ export function TransactionInspectorPage({
         }
     }, [currentPathname, currentSearchParams, prevInspectorData, router, signature, inspectorData]);
 
-    const reset = React.useCallback(() => {
+    const resetParams = React.useCallback(() => {
         const nextQueryParams = new URLSearchParams(currentSearchParams?.toString());
         nextQueryParams.delete('message');
         nextQueryParams.delete('signatures');
@@ -318,6 +333,10 @@ export function TransactionInspectorPage({
         const queryString = nextQueryParams?.toString();
         router.push(`${currentPathname}${queryString ? `?${queryString}` : ''}`);
     }, [currentPathname, currentSearchParams, router]);
+
+    const resetToInspectorPage = React.useCallback(() => {
+        router.push(inspectorPath);
+    }, [inspectorPath, router]);
 
     // Decode the message url param whenever it changes
     React.useEffect(() => {
@@ -337,33 +356,38 @@ export function TransactionInspectorPage({
     }, [currentPathname, currentSearchParams, router]);
 
     return (
-        <div className="container mt-4">
-            <div className="header">
-                <div className="header-body">
-                    <h2 className="header-title">Transaction Inspector</h2>
+        <PageContainer className="mt-6">
+            <div className="mb-8">
+                <div className="border-0 border-b border-solid border-dk-gray-700-dark py-6">
+                    <h2 className="mb-0">Transaction Inspector</h2>
                 </div>
             </div>
             {signature ? (
-                <PermalinkView signature={signature} reset={reset} showTokenBalanceChanges={showTokenBalanceChanges} />
+                <PermalinkView
+                    signature={signature}
+                    reset={resetToInspectorPage}
+                    showTokenBalanceChanges={showTokenBalanceChanges}
+                />
             ) : inspectorData ? (
                 isSquadsProposalAccountData(inspectorData) ? (
-                    <SquadsProposalInspectorCard account={inspectorData.account} onClear={reset} />
+                    <SquadsProposalInspectorCard account={inspectorData.account} onClear={resetParams} />
                 ) : (
                     <LoadedView
                         transaction={inspectorData}
-                        onClear={reset}
+                        onClear={resetParams}
                         showTokenBalanceChanges={showTokenBalanceChanges}
                     />
                 )
             ) : (
                 <RawInput value={paramString} setTransactionData={setInspectorData} />
             )}
-        </div>
+        </PageContainer>
     );
 }
 
-function PermalinkView({
+export function PermalinkView({
     signature,
+    reset,
     showTokenBalanceChanges,
 }: {
     signature: string;
@@ -372,23 +396,23 @@ function PermalinkView({
 }) {
     const details = useRawTransactionDetails(signature);
     const fetchTransaction = useFetchRawTransaction();
-    const refreshTransaction = () => fetchTransaction(signature);
     const transaction = details?.data?.raw;
-    const inspectorPath = useClusterPath({ pathname: '/tx/inspector' });
-    const router = useRouter();
-    const reset = React.useCallback(() => {
-        router.push(inspectorPath);
-    }, [inspectorPath, router]);
 
-    // Fetch details on load
+    // Fetch on load at 'confirmed' (matches providers/transactions/parsed.tsx) so freshly-confirmed txs resolve fast.
+    const fetchConfirmedTx = React.useCallback(() => {
+        fetchTransaction(signature, 'confirmed');
+    }, [fetchTransaction, signature]);
+
     React.useEffect(() => {
-        if (!details) fetchTransaction(signature);
-    }, [signature, details, fetchTransaction]);
+        if (!transaction) {
+            fetchConfirmedTx();
+        }
+    }, [transaction, fetchConfirmedTx]);
 
     if (!details || details.status === FetchStatus.Fetching) {
         return <LoadingCard />;
     } else if (details.status === FetchStatus.FetchFailed) {
-        return <ErrorCard retry={refreshTransaction} text="Failed to fetch transaction" />;
+        return <ErrorCard retry={fetchConfirmedTx} text="Failed to fetch transaction" />;
     } else if (!transaction) {
         return <ErrorCard text="Transaction was not found" retry={reset} retryText="Reset" />;
     }
@@ -396,6 +420,7 @@ function PermalinkView({
     const { message, signatures, meta } = transaction;
     const tx = {
         accountBalances: meta,
+        compiledInnerInstructions: meta?.innerInstructions,
         message,
         rawMessage: message.serialize(),
         signatures,
@@ -412,7 +437,7 @@ function LoadedView({
     onClear: () => void;
     showTokenBalanceChanges: boolean;
 }) {
-    const { message, rawMessage, signatures, accountBalances } = transaction;
+    const { message, rawMessage, signatures, accountBalances, compiledInnerInstructions } = transaction;
 
     const fetchAccountInfo = useFetchAccountInfo();
     React.useEffect(() => {
@@ -432,7 +457,7 @@ function LoadedView({
             {signatures && <TransactionSignatures message={message} signatures={signatures} rawMessage={rawMessage} />}
             <AccountsCard message={message} />
             <AddressTableLookupsCard message={message} />
-            <InstructionsSection message={message} />
+            <InstructionsSection message={message} compiledInnerInstructions={compiledInnerInstructions} />
         </>
     );
 }
@@ -462,50 +487,59 @@ function OverviewCard({
 
     return (
         <>
-            <div className="card">
-                <div className="card-header">
-                    <h3 className="card-header-title">Transaction Overview</h3>
-                    <button className="btn btn-sm d-flex btn-white" onClick={onClear}>
+            <Card ui="dashkit">
+                <CardHeader ui="dashkit" className="gap-2">
+                    <CardTitle as="h3" ui="dashkit">
+                        Transaction Overview
+                    </CardTitle>
+                    <Button ui="dashkit" variant="white" size="sm" className="flex" onClick={onClear}>
                         Clear
-                    </button>
-                    <span className="me-2"></span>
-                    <DownloadableDropdown filename={signature || 'signature'} data={raw} />
-                </div>
+                    </Button>
+                    <DownloadDropdown filename={signature || 'signature'} data={raw} />
+                </CardHeader>
                 <TableCardBody>
-                    <tr>
-                        <td>Serialized Size</td>
-                        <td className="text-lg-end">
-                            <div className="d-flex align-items-end flex-column">
+                    <BaseTable.Row>
+                        <BaseTable.Cell>Serialized Size</BaseTable.Cell>
+                        <BaseTable.Cell className="text-right">
+                            <div className="flex flex-col items-end">
                                 {size} bytes
-                                <span className={size <= PACKET_DATA_SIZE ? 'text-muted' : 'text-warning'}>
+                                <span
+                                    className={
+                                        size <= PACKET_DATA_SIZE ? 'text-dk-gray-700' : 'text-dk-warning-on-dark'
+                                    }
+                                >
                                     Max transaction size is {PACKET_DATA_SIZE} bytes
                                 </span>
                             </div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>Fees</td>
-                        <td className="text-lg-end">
-                            <div className="d-flex align-items-end flex-column">
+                        </BaseTable.Cell>
+                    </BaseTable.Row>
+                    <BaseTable.Row>
+                        <BaseTable.Cell>Fees</BaseTable.Cell>
+                        <BaseTable.Cell className="text-right">
+                            <div className="flex flex-col items-end">
                                 <SolBalance lamports={fee} />
-                                <span className="text-muted">
+                                <span className="text-dk-gray-700">
                                     {`Each signature costs ${DEFAULT_FEES.lamportsPerSignature} lamports`}
                                 </span>
                             </div>
-                        </td>
-                    </tr>
+                        </BaseTable.Cell>
+                    </BaseTable.Row>
 
-                    <tr>
-                        <td>
-                            <div className="d-flex align-items-start flex-column">
+                    <BaseTable.Row>
+                        <BaseTable.Cell>
+                            <div className="flex flex-col items-start">
                                 Fee payer
-                                <span className="mt-1">
-                                    <span className="badge bg-info-soft me-2">Signer</span>
-                                    <span className="badge bg-danger-soft me-2">Writable</span>
+                                <span className="mt-[3px]">
+                                    <Badge ui="dashkit" variant="info" className="mr-1.5">
+                                        Signer
+                                    </Badge>
+                                    <Badge ui="dashkit" variant="destructive" className="mr-1.5">
+                                        Writable
+                                    </Badge>
                                 </span>
                             </div>
-                        </td>
-                        <td className="text-end">
+                        </BaseTable.Cell>
+                        <BaseTable.Cell className="text-right">
                             {message.staticAccountKeys.length === 0 ? (
                                 'No Fee Payer'
                             ) : (
@@ -514,10 +548,10 @@ function OverviewCard({
                                     validator={feePayerValidator}
                                 />
                             )}
-                        </td>
-                    </tr>
+                        </BaseTable.Cell>
+                    </BaseTable.Row>
                 </TableCardBody>
-            </div>
+            </Card>
         </>
     );
 }

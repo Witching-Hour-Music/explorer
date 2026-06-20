@@ -2,8 +2,11 @@ import { useWalletMultiButton } from '@solana/wallet-adapter-base-ui';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 
+import { Logger } from '@/app/shared/lib/logger';
+
 import { BaseConnectWallet } from './BaseConnectWallet';
 
+// FIXME: missing Storybook story — uses useWallet + useWalletModal; pure BaseConnectWallet is already covered.
 export function ConnectWallet() {
     const { wallet, connect, disconnect, connected, connecting, publicKey } = useWallet();
     const { setVisible: setModalVisible } = useWalletModal();
@@ -19,7 +22,7 @@ export function ConnectWallet() {
             disconnect();
         } else if (wallet) {
             connect().catch(e => {
-                console.error('Wallet Connect Error:', e);
+                Logger.error(e);
             });
         } else {
             setVisible(true);

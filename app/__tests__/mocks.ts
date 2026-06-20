@@ -10,7 +10,7 @@ import {
 import { vi } from 'vitest';
 
 // stub a test to not allow passing without tests
-test('stub', () => expect(true).toBeTruthy());
+test('should stub', () => expect(true).toBeTruthy());
 
 vi.mock('next/navigation', () => {
     const actual = vi.importActual('next/navigation');
@@ -62,7 +62,7 @@ export function deserializeMessageV0(message: string): VersionedMessage {
                         readonlyIndexes: atl.readonlyIndexes,
                         writableIndexes: atl.writableIndexes,
                     };
-                }
+                },
             ) ?? [],
         compiledInstructions: m.compiledInstructions.map(
             (ci: {
@@ -82,7 +82,7 @@ export function deserializeMessageV0(message: string): VersionedMessage {
                     data: data,
                     programIdIndex: ci.programIdIndex,
                 };
-            }
+            },
         ),
         header: m.header,
         recentBlockhash: m.recentBlockhash,
@@ -98,11 +98,4 @@ export function deserializeInstruction(instruction: string): MessageCompiledInst
     data.data = Uint8Array.from(data.data.data);
 
     return data;
-}
-
-export async function sleep(ms?: number): Promise<void> {
-    const FALLBACK_TIMEOUT_MS = 2000;
-    const timeoutMs =
-        ms || (process.env.TEST_SERIAL_TIMEOUT ? Number(process.env.TEST_SERIAL_TIMEOUT.trim()) : FALLBACK_TIMEOUT_MS);
-    return await new Promise(resolve => setTimeout(resolve, timeoutMs));
 }

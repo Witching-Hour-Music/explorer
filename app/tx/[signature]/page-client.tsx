@@ -1,91 +1,49 @@
 'use client';
 
-import { DownloadableDropdown } from '@components/common/Downloadable';
+import '@features/transaction/ui/transaction-page.css';
+
 import { ErrorCard } from '@components/common/ErrorCard';
-import { InfoTooltip } from '@components/common/InfoTooltip';
 import { LoadingCard } from '@components/common/LoadingCard';
-import { Signature } from '@components/common/Signature';
-import { Slot } from '@components/common/Slot';
-import { SolBalance } from '@components/common/SolBalance';
-import { TableCardBody } from '@components/common/TableCardBody';
 import { SignatureContext } from '@components/instruction/SignatureContext';
-import { InstructionsSection } from '@components/transaction/InstructionsSection';
-import { ProgramLogSection } from '@components/transaction/ProgramLogSection';
-import { TokenBalancesCard } from '@components/transaction/TokenBalancesCard';
 import { CUProfilingSection } from '@features/cu-profiling';
-import { Receipt, ViewReceiptButton } from '@features/receipt';
+import { Receipt } from '@features/receipt';
 import { isReceiptEnabled } from '@features/receipt';
 import { FetchStatus } from '@providers/cache';
 import { useCluster } from '@providers/cluster';
-import {
-    TransactionStatusInfo,
-    useFetchTransactionStatus,
-    useTransactionDetails,
-    useTransactionStatus,
-} from '@providers/transactions';
+import { useTransactionDetails, useTransactionStatus } from '@providers/transactions';
 import { useFetchTransactionDetails } from '@providers/transactions/parsed';
-import { ParsedTransaction, SystemInstruction, SystemProgram, TransactionSignature } from '@solana/web3.js';
-import { Cluster, ClusterStatus } from '@utils/cluster';
-import { displayTimestamp } from '@utils/date';
+import { TransactionSignature } from '@solana/web3.js';
+import { ClusterStatus } from '@utils/cluster';
 import { SignatureProps } from '@utils/index';
-import { getTransactionInstructionError } from '@utils/program-err';
-import { intoTransactionInstruction } from '@utils/tx';
-import { useClusterPath } from '@utils/url';
-import useTabVisibility from '@utils/use-tab-visibility';
 import bs58 from 'bs58';
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import React, { Suspense, useEffect, useState } from 'react';
-import { RefreshCw, Settings } from 'react-feather';
 
-import { AccountsCard } from '@/app/components/transaction/AccountsCard';
-import { useFetchRawTransaction, useRawTransactionDetails } from '@/app/providers/transactions/raw';
-import { estimateRequestedComputeUnitsForParsedTransaction } from '@/app/utils/compute-units-schedule';
-import { getEpochForSlot } from '@/app/utils/epoch-schedule';
+import { AccountsCard } from '@/app/features/transaction/ui/AccountsCard';
+import { InstructionsSection } from '@/app/features/transaction/ui/InstructionsSection';
+import { ProgramLogSection } from '@/app/features/transaction/ui/ProgramLogSection';
+import { SummaryCard } from '@/app/features/transaction/ui/SummaryCard';
+import { generateTokenBalanceRows, TokenBalancesCard } from '@/app/features/transaction/ui/TokenBalancesCard';
+import { AutoRefresh, useAutoRefreshState } from '@/app/shared/lib/use-auto-refresh';
+import { useBreakpoint } from '@/app/shared/lib/use-breakpoint';
+import { BaseNavigationTabs } from '@/app/shared/ui/navigation-tabs/ui/BaseNavigationTabs';
+import useTabVisibility from '@/app/utils/use-tab-visibility';
 
-export const AUTO_REFRESH_INTERVAL = 2000;
+const ALL_TRANSACTION_TABS = [
+    { path: 'summary', title: 'Summary' },
+    { path: 'accounts', title: 'Accounts' },
+    { path: 'tokens', title: 'Tokens' },
+    { path: 'programs', title: 'Programs' },
+    { path: 'logs', title: 'Logs' },
+];
+
 const ZERO_CONFIRMATION_BAILOUT = 5;
-
-export enum AutoRefresh {
-    Active,
-    Inactive,
-    BailedOut,
-}
-
-export type AutoRefreshProps = {
-    autoRefresh: AutoRefresh;
-};
 
 type Props = Readonly<{
     params: SignatureProps;
 }>;
 
-function getTransactionErrorReason(
-    info: TransactionStatusInfo,
-    tx: ParsedTransaction | undefined
-): { errorReason: string; errorLink?: string } {
-    if (typeof info.result.err === 'string') {
-        return { errorReason: `Runtime Error: "${info.result.err}"` };
-    }
-
-    const programError = getTransactionInstructionError(info.result.err);
-    if (programError !== undefined) {
-        return { errorReason: `Program Error: "Instruction #${programError.index + 1} Failed"` };
-    }
-
-    const { InsufficientFundsForRent } = info.result.err as { InsufficientFundsForRent?: { account_index: number } };
-    if (InsufficientFundsForRent !== undefined) {
-        const address = tx?.message.accountKeys[InsufficientFundsForRent.account_index]?.pubkey;
-        if (address) {
-            return { errorLink: `/address/${address}`, errorReason: `Insufficient Funds For Rent: ${address}` };
-        }
-        return { errorReason: `Insufficient Funds For Rent: Account #${InsufficientFundsForRent.account_index + 1}` };
-    }
-
-    return { errorReason: `Unknown Error: "${JSON.stringify(info.result.err)}"` };
-}
-
-export default function TransactionDetailsPageClient({ params: { signature: raw } }: Props) {
+export function TransactionDetailsPageClient({ params: { signature: raw } }: Props) {
     let signature: TransactionSignature | undefined;
     const searchParams = useSearchParams();
 
@@ -94,23 +52,20 @@ export default function TransactionDetailsPageClient({ params: { signature: raw 
         if (decoded.length === 64) {
             signature = raw;
         }
-    } catch (err) {
+    } catch (_err) {
         /* empty */
     }
 
     const status = useTransactionStatus(signature);
     const clusterStatus = useCluster().status;
     const [zeroConfirmationRetries, setZeroConfirmationRetries] = useState(0);
-    const { visible: isTabVisible } = useTabVisibility();
 
-    let autoRefresh = AutoRefresh.Inactive;
-    if (!isTabVisible) {
-        autoRefresh = AutoRefresh.Inactive;
-    } else if (zeroConfirmationRetries >= ZERO_CONFIRMATION_BAILOUT) {
-        autoRefresh = AutoRefresh.BailedOut;
-    } else if (status?.data?.info && status.data.info.confirmations !== 'max') {
-        autoRefresh = AutoRefresh.Active;
-    }
+    const { visible: isTabVisible } = useTabVisibility();
+    const autoRefresh = useAutoRefreshState({
+        bailedOut: zeroConfirmationRetries >= ZERO_CONFIRMATION_BAILOUT,
+        enabled: Boolean(status?.data?.info && status.data.info.confirmations !== 'max'),
+        isTabVisible,
+    });
 
     useEffect(() => {
         if (status?.status === FetchStatus.Fetched && status.data?.info && status.data.info.confirmations === 0) {
@@ -129,272 +84,24 @@ export default function TransactionDetailsPageClient({ params: { signature: raw 
     }
 
     return (
-        <div className="container mt-n3">
-            <div className="header">
-                <div className="header-body">
-                    <h6 className="header-pretitle">Details</h6>
-                    <h2 className="header-title">Transaction</h2>
-                </div>
-            </div>
+        <div className="transaction-page mx-auto flex max-w-5xl flex-col space-y-9 px-4 pt-3 lg:space-y-12 lg:px-6 lg:pt-5">
+            <header className="-mb-6 flex flex-col gap-1.5 pb-3 pt-2 lg:mb-0">
+                <span className="text-xs font-normal uppercase text-muted">Details</span>
+                <h1 className="m-0 text-2xl font-normal leading-none text-white md:text-3xl">Transaction</h1>
+            </header>
+
             {signature === undefined ? (
                 <ErrorCard text={`Signature "${raw}" is not valid`} />
             ) : clusterStatus === ClusterStatus.Failure ? (
                 <ErrorCard text="RPC is not responding. Please change your RPC url and try again." />
             ) : (
                 <SignatureContext.Provider value={signature}>
-                    <StatusCard signature={signature} autoRefresh={autoRefresh} />
+                    <SummaryCard signature={signature} autoRefresh={autoRefresh} />
                     <Suspense fallback={<LoadingCard message="Loading transaction details" />}>
                         <DetailsSection signature={signature} />
                     </Suspense>
                 </SignatureContext.Provider>
             )}
-        </div>
-    );
-}
-
-function StatusCard({ signature, autoRefresh }: SignatureProps & AutoRefreshProps) {
-    const fetchStatus = useFetchTransactionStatus();
-    const fetchRaw = useFetchRawTransaction();
-    const status = useTransactionStatus(signature);
-    const details = useTransactionDetails(signature);
-    const rawDetails = useRawTransactionDetails(signature);
-    const { cluster, clusterInfo, name: clusterName, status: clusterStatus, url: clusterUrl } = useCluster();
-    const inspectPath = useClusterPath({ pathname: `/tx/${signature}/inspect` });
-    const receiptPath = useClusterPath({
-        additionalParams: new URLSearchParams({ view: 'receipt' }),
-        pathname: `/tx/${signature}`,
-    });
-
-    useEffect(() => {
-        if (!rawDetails && clusterStatus === ClusterStatus.Connected) {
-            fetchRaw(signature);
-        }
-    }, [signature, clusterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
-
-    // Fetch transaction on load
-    useEffect(() => {
-        if (!status && clusterStatus === ClusterStatus.Connected) {
-            fetchStatus(signature);
-        }
-    }, [signature, clusterStatus]); // eslint-disable-line react-hooks/exhaustive-deps
-
-    // Effect to set and clear interval for auto-refresh
-    useEffect(() => {
-        if (autoRefresh === AutoRefresh.Active) {
-            const intervalHandle: NodeJS.Timeout = setInterval(() => fetchStatus(signature), AUTO_REFRESH_INTERVAL);
-
-            return () => {
-                clearInterval(intervalHandle);
-            };
-        }
-    }, [autoRefresh, fetchStatus, signature]);
-
-    if (!status || (status.status === FetchStatus.Fetching && autoRefresh === AutoRefresh.Inactive)) {
-        return <LoadingCard />;
-    } else if (status.status === FetchStatus.FetchFailed) {
-        return <ErrorCard retry={() => fetchStatus(signature)} text="Fetch Failed" />;
-    } else if (!status.data?.info) {
-        if (clusterInfo && clusterInfo.firstAvailableBlock > 0) {
-            return (
-                <ErrorCard
-                    retry={() => fetchStatus(signature)}
-                    text="Not Found"
-                    subtext={`Note: Transactions processed before block ${clusterInfo.firstAvailableBlock} are not available at this time`}
-                />
-            );
-        }
-        return <ErrorCard retry={() => fetchStatus(signature)} text="Not Found" />;
-    }
-
-    const { info } = status.data;
-
-    const transactionWithMeta = details?.data?.transactionWithMeta;
-    const fee = transactionWithMeta?.meta?.fee;
-    const computeUnitsConsumed = transactionWithMeta?.meta?.computeUnitsConsumed;
-    const costUnits = transactionWithMeta?.meta?.costUnits;
-    const transaction = transactionWithMeta?.transaction;
-    const blockhash = transaction?.message.recentBlockhash;
-    const epoch = clusterInfo ? getEpochForSlot(clusterInfo.epochSchedule, BigInt(info.slot)) : undefined;
-    const reservedCUs = transactionWithMeta?.transaction
-        ? estimateRequestedComputeUnitsForParsedTransaction(transactionWithMeta.transaction, epoch, cluster)
-        : undefined;
-    const version = transactionWithMeta?.version;
-    const isNonce = (() => {
-        if (!transaction || transaction.message.instructions.length < 1) {
-            return false;
-        }
-
-        const ix = intoTransactionInstruction(transaction, transaction.message.instructions[0]);
-        return (
-            ix &&
-            SystemProgram.programId.equals(ix.programId) &&
-            SystemInstruction.decodeInstructionType(ix) === 'AdvanceNonceAccount'
-        );
-    })();
-
-    let statusClass = 'success';
-    let statusText = 'Success';
-    let errorReason = undefined;
-    let errorLink = undefined;
-
-    if (info.result.err) {
-        statusClass = 'warning';
-        statusText = 'Error';
-
-        const err = getTransactionErrorReason(info, transaction);
-        errorReason = err.errorReason;
-        if (err.errorLink !== undefined) {
-            if (cluster === Cluster.MainnetBeta) {
-                errorLink = err.errorLink;
-            } else {
-                errorLink = `${err.errorLink}?cluster=${clusterName.toLowerCase()}${
-                    cluster === Cluster.Custom ? `&customUrl=${clusterUrl}` : ''
-                }`;
-            }
-        }
-    }
-
-    return (
-        <div className="card">
-            <div className="card-header align-items-center">
-                <h3 className="card-header-title">Overview</h3>
-                <ViewReceiptButton
-                    signature={signature}
-                    transactionWithMeta={transactionWithMeta}
-                    receiptPath={receiptPath}
-                />
-                <Link className="btn btn-white btn-sm me-2" href={inspectPath}>
-                    <Settings className="align-text-top me-2" size={13} />
-                    Inspect
-                </Link>
-                {autoRefresh === AutoRefresh.Active ? (
-                    <span className="spinner-grow spinner-grow-sm"></span>
-                ) : (
-                    <button className="btn btn-white btn-sm" onClick={() => fetchStatus(signature)}>
-                        <RefreshCw className="align-text-top me-2" size={13} />
-                        Refresh
-                    </button>
-                )}
-                <span className="me-2"></span>
-                <DownloadableDropdown filename={signature} data={rawDetails?.data?.raw?.message.serialize() || null} />
-            </div>
-
-            <TableCardBody>
-                <tr>
-                    <td>Signature</td>
-                    <td className="text-lg-end">
-                        <Signature signature={signature} alignRight />
-                    </td>
-                </tr>
-
-                <tr>
-                    <td>Result</td>
-                    <td className="text-lg-end">
-                        <h3 className="mb-0">
-                            <span className={`badge bg-${statusClass}-soft`}>{statusText}</span>
-                        </h3>
-                    </td>
-                </tr>
-
-                {errorReason !== undefined && (
-                    <tr>
-                        <td>Error</td>
-                        <td className="text-lg-end">
-                            <h3 className="mb-0">
-                                {errorLink !== undefined ? (
-                                    <Link href={errorLink}>
-                                        <span className={`badge bg-${statusClass}-soft`}>{errorReason}</span>
-                                    </Link>
-                                ) : (
-                                    <span className={`badge bg-${statusClass}-soft`}>{errorReason}</span>
-                                )}
-                            </h3>
-                        </td>
-                    </tr>
-                )}
-
-                <tr>
-                    <td>Timestamp</td>
-                    <td className="text-lg-end">
-                        {info.timestamp !== 'unavailable' ? (
-                            <span className="font-monospace">{displayTimestamp(info.timestamp * 1000)}</span>
-                        ) : (
-                            <InfoTooltip bottom right text="Timestamps are only available for confirmed blocks">
-                                Unavailable
-                            </InfoTooltip>
-                        )}
-                    </td>
-                </tr>
-
-                <tr>
-                    <td>Confirmation Status</td>
-                    <td className="text-lg-end text-uppercase">{info.confirmationStatus || 'Unknown'}</td>
-                </tr>
-
-                <tr>
-                    <td>Confirmations</td>
-                    <td className="text-lg-end text-uppercase">{info.confirmations}</td>
-                </tr>
-
-                <tr>
-                    <td>Slot</td>
-                    <td className="text-lg-end">
-                        <Slot slot={info.slot} link />
-                    </td>
-                </tr>
-
-                {blockhash && (
-                    <tr>
-                        <td>
-                            {isNonce ? (
-                                'Nonce'
-                            ) : (
-                                <InfoTooltip text="Transactions use a previously confirmed blockhash as a nonce to prevent double spends">
-                                    Recent Blockhash
-                                </InfoTooltip>
-                            )}
-                        </td>
-                        <td className="text-lg-end">{blockhash}</td>
-                    </tr>
-                )}
-
-                {fee !== undefined && (
-                    <tr>
-                        <td>Fee (SOL)</td>
-                        <td className="text-lg-end">
-                            <SolBalance lamports={fee} />
-                        </td>
-                    </tr>
-                )}
-
-                {computeUnitsConsumed !== undefined && (
-                    <tr>
-                        <td>Compute units consumed</td>
-                        <td className="text-lg-end">{computeUnitsConsumed.toLocaleString('en-US')}</td>
-                    </tr>
-                )}
-
-                {costUnits !== undefined && (
-                    <tr>
-                        <td>Transaction cost</td>
-                        <td className="text-lg-end">{costUnits.toLocaleString('en-US')}</td>
-                    </tr>
-                )}
-
-                {reservedCUs !== undefined && (
-                    <tr>
-                        <td>Reserved CUs</td>
-                        <td className="text-lg-end">{reservedCUs.toLocaleString('en-US')}</td>
-                    </tr>
-                )}
-
-                {version !== undefined && (
-                    <tr>
-                        <td>Transaction Version</td>
-                        <td className="text-lg-end text-uppercase">{version}</td>
-                    </tr>
-                )}
-            </TableCardBody>
         </div>
     );
 }
@@ -407,9 +114,9 @@ function DetailsSection({ signature }: SignatureProps) {
     const transaction = transactionWithMeta?.transaction;
     const message = transaction?.message;
     const { status: clusterStatus } = useCluster();
+    const { isXxl } = useBreakpoint();
     const refreshDetails = () => fetchDetails(signature);
 
-    // Fetch details on load
     useEffect(() => {
         if (!details && clusterStatus === ClusterStatus.Connected && status?.status === FetchStatus.Fetched) {
             fetchDetails(signature);
@@ -426,15 +133,43 @@ function DetailsSection({ signature }: SignatureProps) {
         return <ErrorCard text="Details are not available" />;
     }
 
+    const meta = transactionWithMeta.meta;
+    const accountKeys = transactionWithMeta.transaction.message.accountKeys;
+    const hasTokens =
+        meta?.preTokenBalances &&
+        meta?.postTokenBalances &&
+        accountKeys &&
+        generateTokenBalanceRows(meta.preTokenBalances, meta.postTokenBalances, accountKeys).length > 0;
+
+    const baseTabs = hasTokens ? ALL_TRANSACTION_TABS : ALL_TRANSACTION_TABS.filter(t => t.path !== 'tokens');
+    const tabs = isXxl
+        ? baseTabs
+              .filter(t => t.path !== 'logs')
+              .map(t => (t.path === 'programs' ? { path: 'programs', title: 'Programs & Logs' } : t))
+        : baseTabs;
+
     return (
         <>
-            <CUProfilingSection signature={signature} />
+            <BaseNavigationTabs
+                scrollSpy
+                tabs={tabs}
+                buildHref={path => `#${path}`}
+                wrapperClassName="bg-heavy-metal-900"
+                className="gap-5"
+            />
             <Suspense fallback={<LoadingCard message="Loading accounts" />}>
                 <AccountsCard signature={signature} />
             </Suspense>
             <TokenBalancesCard signature={signature} />
-            <InstructionsSection signature={signature} />
-            <ProgramLogSection signature={signature} />
+            <div className="flex flex-col space-y-9 pb-10 xxl:relative xxl:left-1/2 xxl:w-screen xxl:-translate-x-1/2 xxl:flex-row xxl:items-start xxl:gap-6 xxl:space-y-0 xxl:px-6">
+                <div className="xxl:min-w-0 xxl:flex-[1_1_0%] xxl:overflow-hidden">
+                    <InstructionsSection signature={signature} />
+                </div>
+                <div className="xxl:sticky xxl:top-[70px] xxl:min-w-0 xxl:flex-[1_1_0%] xxl:overflow-hidden" id="logs">
+                    <ProgramLogSection signature={signature} />
+                    <CUProfilingSection signature={signature} />
+                </div>
+            </div>
         </>
     );
 }

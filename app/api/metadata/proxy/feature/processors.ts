@@ -1,13 +1,11 @@
-import { Response as NodeFetchResponse } from 'node-fetch';
+import { Logger } from '@/app/shared/lib/logger';
 
-import Logger from '@/app/utils/logger';
-
-import { errors, matchMaxSizeError } from './errors';
+import { matchMaxSizeError, statusError } from './errors';
 
 /**
- * process binary data and catch any specific errors
+ * Process binary data and catch any specific errors.
  */
-export async function processBinary(data: NodeFetchResponse) {
+export async function processBinary(data: Response) {
     const headers = data.headers;
 
     try {
@@ -17,18 +15,17 @@ export async function processBinary(data: NodeFetchResponse) {
         return { data: buffer, headers };
     } catch (error) {
         if (matchMaxSizeError(error)) {
-            throw errors[413];
-        } else {
-            Logger.debug('Debug:', error);
-            throw errors[500];
+            throw statusError(413, 'Binary body exceeds max size', { cause: error });
         }
+        Logger.warn('[api:metadata-proxy] Failed to process binary data', { error });
+        throw statusError(500, 'Failed to process binary data', { cause: error });
     }
 }
 
 /**
- * process text data as json and handle specific errors
+ * Process JSON data and handle specific errors.
  */
-export async function processJson(data: NodeFetchResponse) {
+export async function processJson(data: Response) {
     const headers = data.headers;
 
     try {
@@ -37,21 +34,20 @@ export async function processJson(data: NodeFetchResponse) {
         return { data: json, headers };
     } catch (error) {
         if (matchMaxSizeError(error)) {
-            throw errors[413];
+            throw statusError(413, 'JSON body exceeds max size', { cause: error });
         } else if (error instanceof SyntaxError) {
             // Handle JSON syntax errors specifically
-            throw errors[415];
-        } else {
-            Logger.debug('Debug:', error);
-            throw errors[500];
+            throw statusError(415, 'Malformed JSON in upstream response', { cause: error });
         }
+        Logger.warn('[api:metadata-proxy] Failed to process JSON data', { error });
+        throw statusError(500, 'Failed to process JSON data', { cause: error });
     }
 }
 
 /**
- * Process text response as JSON, handling newlines and whitespace issues
+ * Process a text response as JSON, handling newlines and whitespace issues.
  */
-export async function processTextAsJson(data: NodeFetchResponse) {
+export async function processTextAsJson(data: Response) {
     const headers = data.headers;
 
     try {
@@ -64,12 +60,11 @@ export async function processTextAsJson(data: NodeFetchResponse) {
         return { data: json, headers };
     } catch (error) {
         if (matchMaxSizeError(error)) {
-            throw errors[413];
+            throw statusError(413, 'Text body exceeds max size', { cause: error });
         } else if (error instanceof SyntaxError) {
-            throw errors[415];
-        } else {
-            Logger.debug('Debug:', error);
-            throw errors[500];
+            throw statusError(415, 'Malformed JSON in text upstream response', { cause: error });
         }
+        Logger.warn('[api:metadata-proxy] Failed to process text-as-JSON data', { error });
+        throw statusError(500, 'Failed to process text-as-JSON data', { cause: error });
     }
 }

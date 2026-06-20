@@ -5,6 +5,8 @@ import { createSolanaRpc } from '@solana/kit';
 import { Cluster, ClusterStatus } from '@utils/cluster';
 import React from 'react';
 
+import { Logger } from '@/app/shared/lib/logger';
+
 export enum Status {
     Idle,
     Disconnected,
@@ -19,11 +21,14 @@ type Supply = Readonly<{
     total: Lamports;
 }>;
 
-type State = Supply | Status | string;
+export type State = Supply | Status | string;
+export type { Supply };
 
 type Dispatch = React.Dispatch<React.SetStateAction<State>>;
-const StateContext = React.createContext<State | undefined>(undefined);
-const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
+export const StateContext: React.Context<State | undefined> = React.createContext<State | undefined>(undefined);
+export const DispatchContext: React.Context<Dispatch | undefined> = React.createContext<Dispatch | undefined>(
+    undefined,
+);
 
 type Props = { children: React.ReactNode };
 export function SupplyProvider({ children }: Props) {
@@ -66,7 +71,7 @@ async function fetch(dispatch: Dispatch, cluster: Cluster, url: string) {
         });
     } catch (err) {
         if (cluster !== Cluster.Custom) {
-            console.error(err, { url });
+            Logger.error(err, { url });
         }
         dispatch('Failed to fetch supply');
     }

@@ -1,5 +1,6 @@
 import { Address } from '@components/common/Address';
 import { SolarizedJsonViewer as ReactJson } from '@components/common/JsonViewer';
+import { cn } from '@components/shared/utils';
 import { BorshEventCoder, BorshInstructionCoder, Idl, Program } from '@coral-xyz/anchor';
 import { IdlDefinedFields } from '@coral-xyz/anchor/dist/cjs/idl';
 import { IdlField, IdlInstruction, IdlType, IdlTypeDef } from '@coral-xyz/anchor/dist/cjs/idl';
@@ -10,13 +11,16 @@ import { camelToTitleCase, numberWithSeparator, snakeToTitleCase } from '@utils/
 import React, { Fragment, ReactNode, useState } from 'react';
 import { ChevronDown, ChevronUp, CornerDownRight } from 'react-feather';
 
-const ANCHOR_SELF_CPI_TAG = Buffer.from('1d9acb512ea545e4', 'hex').reverse();
+import { equals, fromBase64, fromHex, toBase64 } from '@/app/shared/lib/bytes';
+import { Logger } from '@/app/shared/lib/logger';
+import { BaseTable } from '@/app/shared/ui/Table';
+
+const ANCHOR_SELF_CPI_TAG = fromHex('1d9acb512ea545e4').reverse();
 const ANCHOR_SELF_CPI_NAME = 'Anchor Self Invocation';
 
-export function instructionIsSelfCPI(ixData: Buffer | Uint8Array): boolean {
-    const data = Buffer.isBuffer(ixData) ? ixData : Buffer.from(ixData);
-    const slice = data.subarray(0, 8);
-    return ANCHOR_SELF_CPI_TAG.every((byte, index) => slice[index] === byte);
+export function instructionIsSelfCPI(ixData: Uint8Array): boolean {
+    const slice = ixData.subarray(0, 8);
+    return equals(slice, ANCHOR_SELF_CPI_TAG);
 }
 
 /**
@@ -29,7 +33,7 @@ export function decodeEventWithCustomDiscriminator(eventData: string, program: P
     }
 
     // Event data is base64 encoded
-    const data = Buffer.from(eventData, 'base64');
+    const data = fromBase64(eventData);
 
     // Find matching event by comparing discriminators
     for (const event of program.idl.events) {
@@ -55,7 +59,7 @@ export function decodeEventWithCustomDiscriminator(eventData: string, program: P
                 const modifiedIdl: Idl = {
                     ...program.idl,
                     events: program.idl.events.map(ev =>
-                        ev.name === event.name ? { ...ev, discriminator: paddedDiscriminator } : { ...ev }
+                        ev.name === event.name ? { ...ev, discriminator: paddedDiscriminator } : { ...ev },
                     ),
                 };
 
@@ -67,9 +71,9 @@ export function decodeEventWithCustomDiscriminator(eventData: string, program: P
 
                 try {
                     const coder = new BorshEventCoder(modifiedIdl);
-                    const decoded = coder.decode(Buffer.from(paddedData).toString('base64'));
+                    const decoded = coder.decode(toBase64(paddedData));
                     return decoded;
-                } catch (error) {
+                } catch (_error) {
                     return { data: {}, name: event.name };
                 }
             } else {
@@ -78,7 +82,7 @@ export function decodeEventWithCustomDiscriminator(eventData: string, program: P
                     const coder = new BorshEventCoder(program.idl);
                     const decoded = coder.decode(eventData);
                     return decoded;
-                } catch (error) {
+                } catch (_error) {
                     return { data: {}, name: event.name };
                 }
             }
@@ -120,8 +124,8 @@ export function AnchorProgramName({
  * Decodes an instruction using a custom discriminator matcher that supports variable-length discriminators.
  * Handles both standard 8-byte Anchor discriminators and custom shorter discriminators.
  */
-export function decodeInstructionWithCustomDiscriminator(ixData: Buffer | Uint8Array, program: Program): any | null {
-    const data = Buffer.isBuffer(ixData) ? ixData : Buffer.from(ixData);
+export function decodeInstructionWithCustomDiscriminator(ixData: Uint8Array, program: Program): any | null {
+    const data = ixData;
 
     // Find matching instruction by comparing discriminators
     for (const instruction of program.idl.instructions) {
@@ -149,7 +153,7 @@ export function decodeInstructionWithCustomDiscriminator(ixData: Buffer | Uint8A
                 const modifiedIdl: Idl = {
                     ...program.idl,
                     instructions: program.idl.instructions.map(ix =>
-                        ix.name === instruction.name ? { ...ix, discriminator: paddedDiscriminator } : { ...ix }
+                        ix.name === instruction.name ? { ...ix, discriminator: paddedDiscriminator } : { ...ix },
                     ),
                 };
 
@@ -161,9 +165,9 @@ export function decodeInstructionWithCustomDiscriminator(ixData: Buffer | Uint8A
 
                 try {
                     const coder = new BorshInstructionCoder(modifiedIdl);
-                    const decoded = coder.decode(Buffer.from(paddedData) as any);
+                    const decoded = coder.decode(paddedData as any);
                     return decoded;
-                } catch (error) {
+                } catch (_error) {
                     // If Borsh decoding fails, return basic instruction info
                     return { data: {}, name: instruction.name };
                 }
@@ -173,7 +177,7 @@ export function decodeInstructionWithCustomDiscriminator(ixData: Buffer | Uint8A
                     const coder = new BorshInstructionCoder(program.idl);
                     const decoded = coder.decode(data as any);
                     return decoded;
-                } catch (error) {
+                } catch (_error) {
                     // If Borsh decoding fails, return basic instruction info
                     return { data: {}, name: instruction.name };
                 }
@@ -198,13 +202,11 @@ export function getAnchorNameForInstruction(ix: TransactionInstruction, program:
         try {
             decodedIx = coder.decode(ix.data);
         } catch (error) {
-            console.log(
-                'Error while decoding instruction for program',
-                program.programId.toString(),
-                'with discriminator',
-                ix.data.slice(0, Math.min(8, ix.data.length)),
-                error
-            );
+            Logger.debug('[utils:anchor] Error while decoding instruction for program', {
+                discriminator: ix.data.slice(0, Math.min(8, ix.data.length)),
+                error,
+                programId: program.programId.toString(),
+            });
         }
     }
 
@@ -279,7 +281,7 @@ function flattenIdlAccounts(accounts: IdlAccountItem[], nestingLevel = 0): Flatt
 
 export function getAnchorAccountsFromInstruction(
     decodedIx: { name: string } | null,
-    program: Program
+    program: Program,
 ): FlattenedIdlAccount[] | null {
     if (decodedIx) {
         // get ix accounts
@@ -303,15 +305,15 @@ export function mapIxArgsToRows(ixArgs: any, ixType: IdlInstruction, idl: Idl) {
             }
             return mapField(key, value, fieldDef.type, idl);
         } catch (error: any) {
-            console.log('Error while displaying IDL-based account data', error);
+            Logger.debug('[utils:anchor] Error while displaying IDL-based account data', { error });
             return (
-                <tr key={key}>
-                    <td>{key}</td>
-                    <td>{ixType.name}</td>
-                    <td className="metadata-json-viewer m-4">
+                <BaseTable.Row key={key}>
+                    <BaseTable.Cell>{key}</BaseTable.Cell>
+                    <BaseTable.Cell>{ixType.name}</BaseTable.Cell>
+                    <BaseTable.Cell className="m-6 [&_.string-value]:break-all">
                         <ReactJson src={ixArgs} />
-                    </td>
-                </tr>
+                    </BaseTable.Cell>
+                </BaseTable.Row>
             );
         }
     });
@@ -341,15 +343,15 @@ export function mapAccountToRows(accountData: any, accountType: IdlTypeDef, idl:
             }
             return mapField(key, value as any, fieldDef, idl);
         } catch (error: any) {
-            console.log('Error while displaying IDL-based account data', error);
+            Logger.debug('[utils:anchor] Error while displaying IDL-based account data', { error });
             return (
-                <tr key={key}>
-                    <td>{key}</td>
-                    <td>{accountType.name}</td>
-                    <td className="metadata-json-viewer m-4">
+                <BaseTable.Row key={key}>
+                    <BaseTable.Cell>{key}</BaseTable.Cell>
+                    <BaseTable.Cell>{accountType.name}</BaseTable.Cell>
+                    <BaseTable.Cell className="m-6 [&_.string-value]:break-all">
                         <ReactJson src={accountData} />
-                    </td>
-                </tr>
+                    </BaseTable.Cell>
+                </BaseTable.Row>
             );
         }
     });
@@ -430,7 +432,7 @@ function mapField(key: string, value: any, type: IdlType, idl: Idl, keySuffix?: 
                 nestingLevel={nestingLevel}
             >
                 <div
-                    className="text-lg-start"
+                    className="lg:text-left"
                     style={{
                         fontSize: '0.85rem',
                         lineHeight: '1.2',
@@ -440,7 +442,7 @@ function mapField(key: string, value: any, type: IdlType, idl: Idl, keySuffix?: 
                         wordBreak: 'break-all',
                     }}
                 >
-                    {(value as Buffer).toString('base64')}
+                    {toBase64(value as Uint8Array)}
                 </div>
             </SimpleRow>
         );
@@ -475,7 +477,7 @@ function mapField(key: string, value: any, type: IdlType, idl: Idl, keySuffix?: 
                             const innerFieldType = getFieldDef(structFields, innerKey, 0);
                             if (!innerFieldType) {
                                 throw Error(
-                                    `Could not type definition for ${innerKey} field in user-defined struct ${fieldType.name}`
+                                    `Could not type definition for ${innerKey} field in user-defined struct ${fieldType.name}`,
                                 );
                             }
                             return mapField(innerKey, innerValue, innerFieldType, idl, key, nestingLevel + 1);
@@ -486,10 +488,11 @@ function mapField(key: string, value: any, type: IdlType, idl: Idl, keySuffix?: 
         } else if (fieldType.type.kind === 'enum') {
             const enumVariantName = Object.keys(value)[0];
             const variant = fieldType.type.variants.find(
-                val => val.name.toLocaleLowerCase() === enumVariantName.toLocaleLowerCase()
+                val => val.name.toLocaleLowerCase() === enumVariantName.toLocaleLowerCase(),
             );
 
-            return variant && variant.fields ? (
+            const variantFields = variant?.fields;
+            return variant && variantFields ? (
                 <ExpandableRow
                     fieldName={itemKey}
                     fieldType={typeDisplayName({ enum: enumVariantName })}
@@ -498,10 +501,10 @@ function mapField(key: string, value: any, type: IdlType, idl: Idl, keySuffix?: 
                 >
                     <Fragment key={keySuffix ? `${key}-${keySuffix}` : key}>
                         {Object.entries(value[enumVariantName]).map(([innerKey, innerValue]: [string, any], index) => {
-                            const innerFieldType = variant.fields![index];
+                            const innerFieldType = variantFields[index];
                             if (!innerFieldType) {
                                 throw Error(
-                                    `Could not type definition for ${innerKey} field in user-defined struct ${fieldType.name}`
+                                    `Could not type definition for ${innerKey} field in user-defined struct ${fieldType.name}`,
                                 );
                             }
                             return mapField(
@@ -512,7 +515,7 @@ function mapField(key: string, value: any, type: IdlType, idl: Idl, keySuffix?: 
                                     : (innerFieldType as IdlType),
                                 idl,
                                 key,
-                                nestingLevel + 1
+                                nestingLevel + 1,
                             );
                         })}
                     </Fragment>
@@ -529,7 +532,7 @@ function mapField(key: string, value: any, type: IdlType, idl: Idl, keySuffix?: 
                 </SimpleRow>
             );
         } else {
-            throw Error('Unsupported type kind: ' + fieldType.type.kind);
+            throw Error(`Unsupported type kind: ${fieldType.type.kind}`);
         }
     } else if ('option' in type) {
         if (value === null) {
@@ -575,13 +578,13 @@ function mapField(key: string, value: any, type: IdlType, idl: Idl, keySuffix?: 
             </ExpandableRow>
         );
     } else {
-        console.log('Impossible type:', type);
+        Logger.debug('[utils:anchor] Impossible type', { type: type as unknown as string });
         return (
-            <tr key={keySuffix ? `${key}-${keySuffix}` : key}>
-                <td>{camelToTitleCase(key)}</td>
-                <td></td>
-                <td className="text-lg-end">???</td>
-            </tr>
+            <BaseTable.Row key={keySuffix ? `${key}-${keySuffix}` : key}>
+                <BaseTable.Cell>{camelToTitleCase(key)}</BaseTable.Cell>
+                <BaseTable.Cell></BaseTable.Cell>
+                <BaseTable.Cell className="text-right">???</BaseTable.Cell>
+            </BaseTable.Row>
         );
     }
 }
@@ -606,16 +609,16 @@ function SimpleRow({
     }
     itemKey = camelToTitleCase(itemKey);
     return (
-        <tr className={nestingLevel > 0 ? 'table-nested-account' : ''}>
-            <td>
-                <div className="d-flex flex-row align-items-center">
-                    {nestingLevel > 0 && <CornerDownRight className="me-2 mb-1" size={14} />}
+        <BaseTable.Row className={cn(nestingLevel > 0 && 'bg-black/20')}>
+            <BaseTable.Cell>
+                <div className="flex flex-row items-center">
+                    {nestingLevel > 0 && <CornerDownRight className="mb-[3px] mr-1.5" size={14} />}
                     <div>{itemKey}</div>
                 </div>
-            </td>
-            <td>{typeDisplayName(type)}</td>
-            <td className="text-lg-end">{children}</td>
-        </tr>
+            </BaseTable.Cell>
+            <BaseTable.Cell>{typeDisplayName(type)}</BaseTable.Cell>
+            <BaseTable.Cell className="text-right">{children}</BaseTable.Cell>
+        </BaseTable.Row>
     );
 }
 
@@ -633,30 +636,30 @@ export function ExpandableRow({
     const [expanded, setExpanded] = useState(false);
     return (
         <>
-            <tr className="table-group-header">
-                <td>
-                    <div className="d-flex flex-row align-items-center">
-                        {nestingLevel > 0 && <CornerDownRight className="me-2 mb-1" size={14} />}
+            <BaseTable.Row>
+                <BaseTable.Cell>
+                    <div className="flex flex-row items-center">
+                        {nestingLevel > 0 && <CornerDownRight className="mb-[3px] mr-1.5" size={14} />}
                         <div>{fieldName}</div>
                     </div>
-                </td>
-                <td>{fieldType}</td>
-                <td className="text-lg-end" onClick={() => setExpanded(current => !current)}>
-                    <div className="c-pointer">
+                </BaseTable.Cell>
+                <BaseTable.Cell>{fieldType}</BaseTable.Cell>
+                <BaseTable.Cell className="text-right" onClick={() => setExpanded(current => !current)}>
+                    <div className="cursor-pointer">
                         {expanded ? (
                             <>
-                                <span className="text-info me-2">Collapse</span>
+                                <span className="mr-1.5 text-dk-info">Collapse</span>
                                 <ChevronUp size={15} />
                             </>
                         ) : (
                             <>
-                                <span className="text-info me-2">Expand</span>
+                                <span className="mr-1.5 text-dk-info">Expand</span>
                                 <ChevronDown size={15} />
                             </>
                         )}
                     </div>
-                </td>
-            </tr>
+                </BaseTable.Cell>
+            </BaseTable.Row>
             {expanded && <>{children}</>}
         </>
     );
@@ -667,7 +670,7 @@ function typeDisplayName(
         | IdlType
         | {
               enum: string;
-          }
+          },
 ): string {
     switch (type) {
         case 'bool':

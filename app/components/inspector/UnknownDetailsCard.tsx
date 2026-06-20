@@ -1,9 +1,11 @@
 import { TableCardBody } from '@components/common/TableCardBody';
+import { CollapsibleCard } from '@components/shared/ui/collapsible-card';
 import { ProgramField } from '@entities/instruction-card';
 import { useScrollAnchor } from '@providers/scroll-anchor';
 import { TransactionInstruction } from '@solana/web3.js';
-import React from 'react';
 
+import { Badge } from '@/app/components/shared/ui/badge';
+import { BaseTable } from '@/app/shared/ui/Table';
 import getInstructionCardScrollAnchorId from '@/app/utils/get-instruction-card-scroll-anchor-id';
 
 import { BaseRawDetails } from '../common/BaseRawDetails';
@@ -12,36 +14,47 @@ export function UnknownDetailsCard({
     index,
     ix,
     programName,
+    innerCards,
 }: {
     index: number;
     ix: TransactionInstruction;
     programName: string;
+    innerCards?: React.ReactNode[];
 }) {
-    const [expanded, setExpanded] = React.useState(false);
-
     const scrollAnchorRef = useScrollAnchor(getInstructionCardScrollAnchorId([index + 1]));
 
     return (
-        <div className="card" ref={scrollAnchorRef}>
-            <div className={`card-header${!expanded ? ' border-bottom-none' : ''}`}>
-                <h3 className="card-header-title mb-0 d-flex align-items-center">
-                    <span className={`badge bg-info-soft me-2`}>#{index + 1}</span>
-                    {programName} Instruction
-                </h3>
-
-                <button
-                    className={`btn btn-sm d-flex ${expanded ? 'btn-black active' : 'btn-white'}`}
-                    onClick={() => setExpanded(e => !e)}
-                >
-                    {expanded ? 'Collapse' : 'Expand'}
-                </button>
-            </div>
-            {expanded && (
-                <TableCardBody>
-                    <ProgramField programId={ix.programId} showExtendedInfo />
-                    <BaseRawDetails ix={ix} />
-                </TableCardBody>
-            )}
-        </div>
+        <CollapsibleCard
+            ref={scrollAnchorRef}
+            defaultExpanded={false}
+            title={
+                <span className="flex min-w-0 flex-1 items-center">
+                    <Badge ui="dashkit" variant="info" className="mr-1.5 flex-none">
+                        #{index + 1}
+                    </Badge>
+                    <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                        {programName}
+                    </span>
+                    <span className="ml-1.5 flex-none">Instruction</span>
+                </span>
+            }
+        >
+            <TableCardBody>
+                <ProgramField programId={ix.programId} showExtendedInfo />
+                <BaseRawDetails ix={ix} />
+                {innerCards && innerCards.length > 0 && (
+                    <>
+                        <BaseTable.Row className="bg-dark-background text-dk-xs font-semibold uppercase tracking-[0.08em] text-dark-muted-foreground">
+                            <BaseTable.Cell colSpan={3}>Inner Instructions</BaseTable.Cell>
+                        </BaseTable.Row>
+                        <BaseTable.Row>
+                            <BaseTable.Cell colSpan={3}>
+                                <div>{innerCards}</div>
+                            </BaseTable.Cell>
+                        </BaseTable.Row>
+                    </>
+                )}
+            </TableCardBody>
+        </CollapsibleCard>
     );
 }

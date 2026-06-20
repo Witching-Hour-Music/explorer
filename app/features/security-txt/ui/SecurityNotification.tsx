@@ -3,10 +3,11 @@ import { isUpgradeableLoaderAccountData, type ParsedData } from '@providers/acco
 import { useSecurityTxt } from '../model/useSecurityTxt';
 import { BaseSecurityNotification } from './BaseSecurityNotification';
 
+// FIXME: missing Storybook story — needs useSecurityTxt mocked + an UpgradeableLoader ParsedData fixture.
 export function SecurityNotification({ parsedData, address }: { parsedData: ParsedData | undefined; address: string }) {
     const securityTxt = useSecurityTxt(
         address,
-        parsedData && isUpgradeableLoaderAccountData(parsedData) ? { programData: parsedData.programData } : undefined
+        parsedData && isUpgradeableLoaderAccountData(parsedData) ? { programData: parsedData.programData } : undefined,
     );
 
     if (!parsedData || !isUpgradeableLoaderAccountData(parsedData)) return null;

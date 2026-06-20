@@ -9,6 +9,7 @@ import { vi } from 'vitest';
 import { GENESIS_HASHES } from '@/app/entities/chain-id';
 import * as programMetadataIdlModule from '@/app/entities/program-metadata';
 import { ClusterProvider } from '@/app/providers/cluster';
+import { invariant } from '@/app/shared/lib/invariant';
 import { Cluster, clusterSlug } from '@/app/utils/cluster';
 
 import { IdlCard } from '../IdlCard';
@@ -108,17 +109,19 @@ describe('IdlCard', () => {
     test('should render IdlCard with PMP IDL when programMetadataIdl exists', async () => {
         vi.spyOn(anchorModule, 'useAnchorProgram').mockReturnValue({
             idl: null,
+            isLoading: false,
             program: null,
         });
 
         vi.spyOn(programMetadataIdlModule, 'useProgramMetadataIdl').mockReturnValue({
+            isLoading: false,
             programMetadataIdl: createMockProgramMetadataIdl(),
         });
 
         render(
             <ClusterProvider>
                 <IdlCard programId={programId} />
-            </ClusterProvider>
+            </ClusterProvider>,
         );
 
         await waitFor(() => {
@@ -126,22 +129,49 @@ describe('IdlCard', () => {
         });
         expect(screen.getByText(/Program Metadata IDL/)).toBeInTheDocument();
         expect(screen.queryByText(/Anchor IDL/)).not.toBeInTheDocument();
+
+        const windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+        const downloadButton = screen.getByRole('button', { name: 'Download' });
+        fireEvent.click(downloadButton);
+        const generateSdkButton = screen.getByRole('button', { name: 'Generate SDK' });
+        fireEvent.click(generateSdkButton);
+
+        expect(screen.getByText('Leaving Solana Explorer')).toBeInTheDocument();
+        expect(screen.getByText('You are now leaving Explorer and going to Castaway.')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+        expect(windowOpenSpy).toHaveBeenCalledTimes(1);
+        const firstCall = windowOpenSpy.mock.calls[0];
+        invariant(firstCall, 'expected window.open to have been called');
+        const [openedUrl, target, features] = firstCall;
+        const castawayUrl = new URL(openedUrl as string);
+        expect(castawayUrl.origin).toBe('https://www.castaway.lol');
+        expect(castawayUrl.pathname).toBe('/');
+        expect(castawayUrl.searchParams.get('program')).toBe(programId);
+        expect(castawayUrl.searchParams.get('idlSource')).toBe('program-metadata');
+        expect(castawayUrl.searchParams.get('network')).toBe('mainnet-beta');
+        expect(target).toBe('_blank');
+        expect(features).toBe('noopener,noreferrer');
+        windowOpenSpy.mockRestore();
     });
 
     test('should render IdlCard with Anchor IDL when anchorIdl exists', async () => {
         vi.spyOn(anchorModule, 'useAnchorProgram').mockReturnValue({
             idl: createMockAnchorIdl(),
+            isLoading: false,
             program: null,
         });
 
         vi.spyOn(programMetadataIdlModule, 'useProgramMetadataIdl').mockReturnValue({
+            isLoading: false,
             programMetadataIdl: null,
         });
 
         render(
             <ClusterProvider>
                 <IdlCard programId={programId} />
-            </ClusterProvider>
+            </ClusterProvider>,
         );
 
         await waitFor(() => {
@@ -149,29 +179,56 @@ describe('IdlCard', () => {
         });
         expect(screen.getByText(/Anchor IDL/)).toBeInTheDocument();
         expect(screen.queryByText(/Program Metadata IDL/)).not.toBeInTheDocument();
+
+        const windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+        const downloadButton = screen.getByRole('button', { name: 'Download' });
+        fireEvent.click(downloadButton);
+        const generateSdkButton = screen.getByRole('button', { name: 'Generate SDK' });
+        fireEvent.click(generateSdkButton);
+
+        expect(screen.getByText('Leaving Solana Explorer')).toBeInTheDocument();
+        expect(screen.getByText('You are now leaving Explorer and going to Castaway.')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+        expect(windowOpenSpy).toHaveBeenCalledTimes(1);
+        const firstCall = windowOpenSpy.mock.calls[0];
+        invariant(firstCall, 'expected window.open to have been called');
+        const [openedUrl, target, features] = firstCall;
+        const castawayUrl = new URL(openedUrl as string);
+        expect(castawayUrl.origin).toBe('https://www.castaway.lol');
+        expect(castawayUrl.pathname).toBe('/');
+        expect(castawayUrl.searchParams.get('program')).toBe(programId);
+        expect(castawayUrl.searchParams.get('idlSource')).toBe('anchor');
+        expect(castawayUrl.searchParams.get('network')).toBe('mainnet-beta');
+        expect(target).toBe('_blank');
+        expect(features).toBe('noopener,noreferrer');
+        windowOpenSpy.mockRestore();
     });
 
     test('should render IdlCard tabs when both IDLs exist', async () => {
         vi.spyOn(anchorModule, 'useAnchorProgram').mockReturnValue({
             idl: createMockAnchorIdl(),
+            isLoading: false,
             program: null,
         });
 
         vi.spyOn(programMetadataIdlModule, 'useProgramMetadataIdl').mockReturnValue({
+            isLoading: false,
             programMetadataIdl: createMockProgramMetadataIdl(),
         });
 
         render(
             <ClusterProvider>
                 <IdlCard programId={programId} />
-            </ClusterProvider>
+            </ClusterProvider>,
         );
 
         await waitFor(() => {
             expect(screen.getByText(/Program Metadata IDL/)).toBeInTheDocument();
         });
 
-        const button = screen.getByRole('button', { name: 'Anchor' });
+        const button = screen.getByRole('tab', { name: 'Anchor' });
         fireEvent.click(button);
         expect(screen.getByText(/Anchor IDL/)).toBeInTheDocument();
     });
@@ -179,33 +236,35 @@ describe('IdlCard', () => {
     test('should render BaseWarningCard when Anchor IDL address mismatches programId', async () => {
         vi.spyOn(anchorModule, 'useAnchorProgram').mockReturnValue({
             idl: createMockAnchorIdl(Keypair.generate().publicKey.toBase58()), // imitate malicious IDL
+            isLoading: false,
             program: null,
         });
 
         vi.spyOn(programMetadataIdlModule, 'useProgramMetadataIdl').mockReturnValue({
+            isLoading: false,
             programMetadataIdl: createMockAnchorIdl(), // but use normal one for PMP program
         });
 
         render(
             <ClusterProvider>
                 <IdlCard programId={programId} />
-            </ClusterProvider>
+            </ClusterProvider>,
         );
 
         // PMP tab is active first
         await waitFor(() => {
-            expect(screen.getByRole('button', { name: 'Anchor' })).toBeInTheDocument();
+            expect(screen.getByRole('tab', { name: 'Anchor' })).toBeInTheDocument();
         });
 
         // Switch to Anchor tab to trigger the mismatch
-        fireEvent.click(screen.getByRole('button', { name: 'Anchor' }));
+        fireEvent.click(screen.getByRole('tab', { name: 'Anchor' }));
 
         expect(screen.getByText('IDL Program ID Mismatch')).toBeInTheDocument();
         expect(screen.getByText(/does not match the program being viewed/)).toBeInTheDocument();
         expect(screen.queryByText(/Anchor IDL/)).not.toBeInTheDocument();
 
         // Switch back to PMP tab - should render IDL normally
-        fireEvent.click(screen.getByRole('button', { name: 'Program Metadata' }));
+        fireEvent.click(screen.getByRole('tab', { name: 'Program Metadata' }));
 
         expect(screen.queryByText('IDL Program ID Mismatch')).not.toBeInTheDocument();
         expect(screen.getByText('0.30.1 Program Metadata IDL')).toBeInTheDocument();
@@ -214,17 +273,19 @@ describe('IdlCard', () => {
     test('should not render IdlCard when both IDLs are null', async () => {
         vi.spyOn(anchorModule, 'useAnchorProgram').mockReturnValue({
             idl: null,
+            isLoading: false,
             program: null,
         });
 
         vi.spyOn(programMetadataIdlModule, 'useProgramMetadataIdl').mockReturnValue({
+            isLoading: false,
             programMetadataIdl: null,
         });
 
         render(
             <ClusterProvider>
                 <IdlCard programId={programId} />
-            </ClusterProvider>
+            </ClusterProvider>,
         );
 
         await waitFor(() => {

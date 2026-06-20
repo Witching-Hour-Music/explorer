@@ -1,41 +1,45 @@
-import { AccountAddressRow, AccountBalanceRow, AccountHeader } from '@components/common/Account';
+import { AccountAddressRow, AccountBalanceRow } from '@components/common/Account';
 import { Address } from '@components/common/Address';
-import { TableCardBody } from '@components/common/TableCardBody';
-import { Account, useFetchAccountInfo } from '@providers/accounts';
+import { useRefreshAccount } from '@entities/account';
+import { AccountCard } from '@features/account';
+import { Account } from '@providers/accounts';
 import { NonceAccount } from '@validators/accounts/nonce';
 import React from 'react';
 
+import { BaseTable } from '@/app/shared/ui/Table';
+
 export function NonceAccountSection({ account, nonceAccount }: { account: Account; nonceAccount: NonceAccount }) {
-    const refresh = useFetchAccountInfo();
+    const refresh = useRefreshAccount();
     return (
-        <div className="card">
-            <AccountHeader title="Nonce Account" refresh={() => refresh(account.pubkey, 'parsed')} />
+        <AccountCard
+            title="Nonce Account"
+            account={account}
+            analyticsSection="nonce_account_section"
+            refresh={() => refresh(account.pubkey, 'parsed')}
+        >
+            <AccountAddressRow account={account} />
+            <AccountBalanceRow account={account} />
 
-            <TableCardBody>
-                <AccountAddressRow account={account} />
-                <AccountBalanceRow account={account} />
+            <BaseTable.Row>
+                <BaseTable.Cell>Authority</BaseTable.Cell>
+                <BaseTable.Cell className="text-right">
+                    <Address pubkey={nonceAccount.info.authority} alignRight raw link />
+                </BaseTable.Cell>
+            </BaseTable.Row>
 
-                <tr>
-                    <td>Authority</td>
-                    <td className="text-lg-end">
-                        <Address pubkey={nonceAccount.info.authority} alignRight raw link />
-                    </td>
-                </tr>
+            <BaseTable.Row>
+                <BaseTable.Cell>Blockhash</BaseTable.Cell>
+                <BaseTable.Cell className="text-right">
+                    <code>{nonceAccount.info.blockhash}</code>
+                </BaseTable.Cell>
+            </BaseTable.Row>
 
-                <tr>
-                    <td>Blockhash</td>
-                    <td className="text-lg-end">
-                        <code>{nonceAccount.info.blockhash}</code>
-                    </td>
-                </tr>
-
-                <tr>
-                    <td>Fee</td>
-                    <td className="text-lg-end">
-                        {nonceAccount.info.feeCalculator.lamportsPerSignature} lamports per signature
-                    </td>
-                </tr>
-            </TableCardBody>
-        </div>
+            <BaseTable.Row>
+                <BaseTable.Cell>Fee</BaseTable.Cell>
+                <BaseTable.Cell className="text-right">
+                    {nonceAccount.info.feeCalculator.lamportsPerSignature} lamports per signature
+                </BaseTable.Cell>
+            </BaseTable.Row>
+        </AccountCard>
     );
 }

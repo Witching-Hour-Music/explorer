@@ -4,7 +4,6 @@ on:
   push:
     branches: [master, development, 'development-*']
   pull_request:
-    branches: [master, development, 'development-*']
 
 env:
   # cache affixes and folders
@@ -12,9 +11,9 @@ env:
   PNPM_CACHE_FOLDER: ~/.pnpm-store
   PW_CACHE_AFFIX: pw
   PW_CACHE_FOLDER: ~/.cache/ms-playwright
-  SENTRY_SUPPRESS_GLOBAL_ERROR_HANDLER_FILE_WARNING: 1
   SENTRY_TELEMETRY_DISABLE: true
   STORYBOOK_DISABLE_TELEMETRY: 1
+  OPENSPEC_TELEMETRY: 0
 
 jobs:
   # Job to read Node version from .nvmrc
@@ -41,7 +40,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: ['${{ needs.read-nvmrc.outputs.node-version }}']
+        node-version: ['${{ needs.read-nvmrc.outputs.node-version }}', '24.x']
 
     steps:
       - name: Checkout
@@ -55,14 +54,14 @@ jobs:
         run: pnpm config set store-dir ${{ env.PNPM_CACHE_FOLDER }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Setup Additional Cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: additional_cache
         with:
           path: |
@@ -80,11 +79,17 @@ jobs:
           echo "PNPM version: $(pnpm --version)"
           pnpm install --frozen-lockfile
 
+      - name: Format
+        run: pnpm format:ci
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: OpenSpec
+        run: pnpm openspec:validate
+
       - name: Build
         run: pnpm build
-
-      - name: Code-style
-        run: pnpm format:ci
 
       - name: Test
         env:
@@ -108,14 +113,14 @@ jobs:
         run: pnpm config set store-dir ${{ env.PNPM_CACHE_FOLDER }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ needs.read-nvmrc.outputs.node-version }}
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Cache pnpm store
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.PNPM_CACHE_FOLDER }}
           key: ${{ runner.os }}-${{ env.PNPM_CACHE_AFFIX }}-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -126,7 +131,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate sitemap
-        run: pnpx tsx scripts/update-sitemap.ts
+        run: pnpm exec tsx scripts/update-sitemap.ts
 
       - name: Check for sitemap drift
         run: git diff --exit-code public/sitemap.xml public/default-sitemap.xml public/accounts-sitemap.xml
@@ -134,12 +139,12 @@ jobs:
   Storybook-Smoke-Tests:
     needs: read-nvmrc
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     continue-on-error: true
 
     strategy:
       matrix:
-        node-version: ['${{ needs.read-nvmrc.outputs.node-version }}', '22.x']
+        node-version: ['${{ needs.read-nvmrc.outputs.node-version }}', '24.x']
 
     steps:
       - name: Checkout
@@ -152,14 +157,14 @@ jobs:
         run: pnpm config set store-dir ${{ env.PNPM_CACHE_FOLDER }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Cache pnpm store
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.PNPM_CACHE_FOLDER }}
           key: ${{ runner.os }}-${{ env.PNPM_CACHE_AFFIX }}-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -167,7 +172,7 @@ jobs:
             ${{ runner.os }}-${{ env.PNPM_CACHE_AFFIX }}-
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: pw_cache
         with:
           path: ${{ env.PW_CACHE_FOLDER }}

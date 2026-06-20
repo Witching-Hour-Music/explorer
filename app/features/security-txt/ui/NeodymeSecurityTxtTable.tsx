@@ -1,5 +1,7 @@
 import { TableCardBody } from '@components/common/TableCardBody';
 
+import { BaseTable } from '@/app/shared/ui/Table';
+
 import type { NeodymeSecurityTXT } from '../lib/types';
 import { CodeCell, ContactInfo, ExternalLinkCell, StringCell } from './common';
 import { isValidLink } from './utils';
@@ -24,10 +26,10 @@ export function NeodymeSecurityTxtTable({ data }: { data: NeodymeSecurityTXT }) 
         <TableCardBody>
             {ROWS.filter(x => x.key in data).map((x, idx) => {
                 return (
-                    <tr key={idx}>
-                        <td className="w-100">{x.display}</td>
+                    <BaseTable.Row key={idx}>
+                        <BaseTable.Cell className="w-full">{x.display}</BaseTable.Cell>
                         <RenderEntry value={data[x.key]} type={x.type} />
-                    </tr>
+                    </BaseTable.Row>
                 );
             })}
         </TableCardBody>
@@ -106,8 +108,8 @@ function RenderEntry({ value, type }: { value: NeodymeSecurityTXT[keyof NeodymeS
             return <StringCell value={value} />;
         case DisplayType.Contacts:
             return (
-                <td className="font-monospace">
-                    <ul className="text-lg-end security-contacts [&.security-contacts]:e-text-left">
+                <BaseTable.Cell className="text-right font-mono">
+                    <ul className="m-0 list-none pl-0 text-right">
                         {value?.split(',').map((c, i) => {
                             const idx = c.indexOf(':');
                             if (idx < 0) {
@@ -122,7 +124,7 @@ function RenderEntry({ value, type }: { value: NeodymeSecurityTXT[keyof NeodymeS
                             );
                         })}
                     </ul>
-                </td>
+                </BaseTable.Cell>
             );
         case DisplayType.URL:
             if (isValidLink(value)) {
@@ -141,13 +143,13 @@ function RenderEntry({ value, type }: { value: NeodymeSecurityTXT[keyof NeodymeS
                 return <ExternalLinkCell url={value} />;
             }
             return (
-                <td>
-                    <ul className="security-txt-auditors text-lg-end [&.security-txt-auditors]:e-text-left">
+                <BaseTable.Cell className="text-right">
+                    <ul className="m-0 list-none pl-0 text-right">
                         {value?.split(',').map((c, idx) => {
                             return <li key={idx}>{c}</li>;
                         })}
                     </ul>
-                </td>
+                </BaseTable.Cell>
             );
         default:
             break;

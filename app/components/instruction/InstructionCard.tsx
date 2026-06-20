@@ -12,11 +12,13 @@ type InstructionProps = {
     index: number;
     ix: TransactionInstruction | ParsedInstruction;
     defaultRaw?: boolean;
-    innerCards?: JSX.Element[];
-    eventCards?: JSX.Element[];
+    innerCards?: React.ReactNode[];
+    eventCards?: React.ReactNode[];
     childIndex?: number;
     // Raw instruction for displaying accounts and hex data in raw mode (used by inspector)
     raw?: TransactionInstruction;
+    headerButtons?: React.ReactNode;
+    collapsible?: boolean;
 };
 
 export function InstructionCard({
@@ -30,6 +32,8 @@ export function InstructionCard({
     eventCards,
     childIndex,
     raw: rawProp,
+    headerButtons,
+    collapsible,
 }: InstructionProps) {
     const signature = useContext(SignatureContext);
     const rawDetails = useRawTransactionDetails(signature);
@@ -58,6 +62,8 @@ export function InstructionCard({
             childIndex={childIndex}
             raw={raw}
             onRequestRaw={canFetchRaw ? fetchRawTrigger : undefined}
+            headerButtons={headerButtons}
+            collapsible={collapsible}
         >
             {children}
         </BaseInstructionCard>

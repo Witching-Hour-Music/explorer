@@ -7,23 +7,29 @@ import { ExternalLinkWarning } from '@components/common/ExternalLinkWarning';
 import { LoadingCard } from '@components/common/LoadingCard';
 import { Slot } from '@components/common/Slot';
 import { TableCardBody } from '@components/common/TableCardBody';
+import { estimateRequestedComputeUnits } from '@entities/compute-unit';
 import { BlockProvider, FetchStatus, useBlock, useFetchBlock } from '@providers/block';
 import { useCluster } from '@providers/cluster';
 import { ClusterStatus } from '@utils/cluster';
 import { displayTimestamp, displayTimestampUtc } from '@utils/date';
 import { IBRL_EXPLORER_URL } from '@utils/env';
-import { useClusterPath } from '@utils/url';
-import Link from 'next/link';
-import { notFound, useSelectedLayoutSegment } from 'next/navigation';
-import React, { PropsWithChildren } from 'react';
+import { notFound, useSearchParams } from 'next/navigation';
+import React, { PropsWithChildren, use } from 'react';
 import { ExternalLink } from 'react-feather';
 
-import { estimateRequestedComputeUnits } from '@/app/utils/compute-units-schedule';
+import { Card, CardHeader, CardTitle } from '@/app/shared/ui/Card';
+import { type NavigationTab, NavigationTabs } from '@/app/shared/ui/navigation-tabs';
+import { PageContainer } from '@/app/shared/ui/page-container/PageContainer';
+import { StickyHeader } from '@/app/shared/ui/sticky-header/StickyHeader';
+import { BaseTable } from '@/app/shared/ui/Table';
 import { getEpochForSlot, getMaxComputeUnitsInBlock } from '@/app/utils/epoch-schedule';
+import { pickClusterParams } from '@/app/utils/url';
 
-type Props = PropsWithChildren<{ params: { slot: string } }>;
+type SlotParams = { slot: string };
+type Props = PropsWithChildren<{ params: Promise<SlotParams> }>;
+type InnerProps = PropsWithChildren<{ params: SlotParams }>;
 
-function BlockLayoutInner({ children, params: { slot } }: Props) {
+function BlockLayoutInner({ children, params: { slot } }: InnerProps) {
     const slotNumber = Number(slot);
     if (isNaN(slotNumber) || slotNumber >= Number.MAX_SAFE_INTEGER || slotNumber % 1 !== 0) {
         notFound();
@@ -67,166 +73,172 @@ function BlockLayoutInner({ children, params: { slot } }: Props) {
 
         content = (
             <>
-                <div className="card">
-                    <div className="card-header align-items-center">
-                        <h3 className="card-header-title">Overview</h3>
+                <Card ui="dashkit">
+                    <CardHeader ui="dashkit">
+                        <CardTitle as="h3" ui="dashkit">
+                            Overview
+                        </CardTitle>
                         {IBRL_EXPLORER_URL && (
                             <ExternalLinkWarning href={`${IBRL_EXPLORER_URL}/block/${slotNumber}`}>
                                 <>
-                                    <ExternalLink className="e-me-2 e-align-text-top" size={13} />
+                                    <ExternalLink className="me-2 align-text-top" size={13} />
                                     IBRL Explorer
                                 </>
                             </ExternalLinkWarning>
                         )}
-                    </div>
+                    </CardHeader>
                     <TableCardBody>
-                        <tr>
-                            <td className="w-100">Blockhash</td>
-                            <td className="text-lg-end font-monospace">
+                        <BaseTable.Row>
+                            <BaseTable.Cell className="w-full">Blockhash</BaseTable.Cell>
+                            <BaseTable.Cell className="text-right font-mono">
                                 <span>{block.blockhash}</span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td className="w-100">Slot</td>
-                            <td className="text-lg-end font-monospace">
+                            </BaseTable.Cell>
+                        </BaseTable.Row>
+                        <BaseTable.Row>
+                            <BaseTable.Cell className="w-full">Slot</BaseTable.Cell>
+                            <BaseTable.Cell className="text-right font-mono">
                                 <Slot slot={slotNumber} />
-                            </td>
-                        </tr>
+                            </BaseTable.Cell>
+                        </BaseTable.Row>
                         {blockLeader !== undefined && (
-                            <tr>
-                                <td className="w-100">Slot Leader</td>
-                                <td className="text-lg-end">
+                            <BaseTable.Row>
+                                <BaseTable.Cell className="w-full">Slot Leader</BaseTable.Cell>
+                                <BaseTable.Cell className="text-right">
                                     <Address pubkey={blockLeader} alignRight link />
-                                </td>
-                            </tr>
+                                </BaseTable.Cell>
+                            </BaseTable.Row>
                         )}
                         {block.blockTime ? (
                             <>
-                                <tr>
-                                    <td>Timestamp (Local)</td>
-                                    <td className="text-lg-end">
-                                        <span className="font-monospace">
+                                <BaseTable.Row>
+                                    <BaseTable.Cell>Timestamp (Local)</BaseTable.Cell>
+                                    <BaseTable.Cell className="text-right">
+                                        <span className="font-mono">
                                             {displayTimestamp(block.blockTime * 1000, true)}
                                         </span>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>Timestamp (UTC)</td>
-                                    <td className="text-lg-end">
-                                        <span className="font-monospace">
+                                    </BaseTable.Cell>
+                                </BaseTable.Row>
+                                <BaseTable.Row>
+                                    <BaseTable.Cell>Timestamp (UTC)</BaseTable.Cell>
+                                    <BaseTable.Cell className="text-right">
+                                        <span className="font-mono">
                                             {displayTimestampUtc(block.blockTime * 1000, true)}
                                         </span>
-                                    </td>
-                                </tr>
+                                    </BaseTable.Cell>
+                                </BaseTable.Row>
                             </>
                         ) : (
-                            <tr>
-                                <td className="w-100">Timestamp</td>
-                                <td className="text-lg-end">Unavailable</td>
-                            </tr>
+                            <BaseTable.Row>
+                                <BaseTable.Cell className="w-full">Timestamp</BaseTable.Cell>
+                                <BaseTable.Cell className="text-right">Unavailable</BaseTable.Cell>
+                            </BaseTable.Row>
                         )}
                         {epoch !== undefined && (
-                            <tr>
-                                <td className="w-100">Epoch</td>
-                                <td className="text-lg-end font-monospace">
+                            <BaseTable.Row>
+                                <BaseTable.Cell className="w-full">Epoch</BaseTable.Cell>
+                                <BaseTable.Cell className="text-right font-mono">
                                     <Epoch epoch={epoch} link />
-                                </td>
-                            </tr>
+                                </BaseTable.Cell>
+                            </BaseTable.Row>
                         )}
-                        <tr>
-                            <td className="w-100">Parent Blockhash</td>
-                            <td className="text-lg-end font-monospace">
+                        <BaseTable.Row>
+                            <BaseTable.Cell className="w-full">Parent Blockhash</BaseTable.Cell>
+                            <BaseTable.Cell className="text-right font-mono">
                                 <span>{block.previousBlockhash}</span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td className="w-100">Parent Slot</td>
-                            <td className="text-lg-end font-monospace">
+                            </BaseTable.Cell>
+                        </BaseTable.Row>
+                        <BaseTable.Row>
+                            <BaseTable.Cell className="w-full">Parent Slot</BaseTable.Cell>
+                            <BaseTable.Cell className="text-right font-mono">
                                 <Slot slot={block.parentSlot} link />
-                            </td>
-                        </tr>
+                            </BaseTable.Cell>
+                        </BaseTable.Row>
                         {parentLeader !== undefined && (
-                            <tr>
-                                <td className="w-100">Parent Slot Leader</td>
-                                <td className="text-lg-end">
+                            <BaseTable.Row>
+                                <BaseTable.Cell className="w-full">Parent Slot Leader</BaseTable.Cell>
+                                <BaseTable.Cell className="text-right">
                                     <Address pubkey={parentLeader} alignRight link />
-                                </td>
-                            </tr>
+                                </BaseTable.Cell>
+                            </BaseTable.Row>
                         )}
                         {childSlot !== undefined && (
-                            <tr>
-                                <td className="w-100">Child Slot</td>
-                                <td className="text-lg-end font-monospace">
+                            <BaseTable.Row>
+                                <BaseTable.Cell className="w-full">Child Slot</BaseTable.Cell>
+                                <BaseTable.Cell className="text-right font-mono">
                                     <Slot slot={childSlot} link />
-                                </td>
-                            </tr>
+                                </BaseTable.Cell>
+                            </BaseTable.Row>
                         )}
                         {childLeader !== undefined && (
-                            <tr>
-                                <td className="w-100">Child Slot Leader</td>
-                                <td className="text-lg-end">
+                            <BaseTable.Row>
+                                <BaseTable.Cell className="w-full">Child Slot Leader</BaseTable.Cell>
+                                <BaseTable.Cell className="text-right">
                                     <Address pubkey={childLeader} alignRight link />
-                                </td>
-                            </tr>
+                                </BaseTable.Cell>
+                            </BaseTable.Row>
                         )}
-                        <tr>
-                            <td className="w-100">Processed Transactions</td>
-                            <td className="text-lg-end font-monospace">
+                        <BaseTable.Row>
+                            <BaseTable.Cell className="w-full">Processed Transactions</BaseTable.Cell>
+                            <BaseTable.Cell className="text-right font-mono">
                                 <span>{block.transactions.length}</span>
-                            </td>
-                        </tr>
+                            </BaseTable.Cell>
+                        </BaseTable.Row>
                         {showSuccessfulCount && (
-                            <tr>
-                                <td className="w-100">Successful Transactions</td>
-                                <td className="text-lg-end font-monospace">
+                            <BaseTable.Row>
+                                <BaseTable.Cell className="w-full">Successful Transactions</BaseTable.Cell>
+                                <BaseTable.Cell className="text-right font-mono">
                                     <span>{successfulTxs.length}</span>
-                                </td>
-                            </tr>
+                                </BaseTable.Cell>
+                            </BaseTable.Row>
                         )}
-                        <tr>
-                            <td className="w-100">Total Compute Units Consumed</td>
-                            <td className="text-lg-end font-monospace">
+                        <BaseTable.Row>
+                            <BaseTable.Cell className="w-full">Total Compute Units Consumed</BaseTable.Cell>
+                            <BaseTable.Cell className="text-right font-mono">
                                 <span>{totalCUs.toLocaleString()}</span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td className="w-100">Transaction Cost Utilization</td>
-                            <td className="text-lg-end font-monospace">
+                            </BaseTable.Cell>
+                        </BaseTable.Row>
+                        <BaseTable.Row>
+                            <BaseTable.Cell className="w-full">Transaction Cost Utilization</BaseTable.Cell>
+                            <BaseTable.Cell className="text-right font-mono">
                                 <span>
                                     {totalCostUnits.toLocaleString()} / {maxComputeUnits.toLocaleString()} (
                                     {Math.round((totalCostUnits / maxComputeUnits) * 100)}%)
                                 </span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td className="w-100">Reserved Compute Units</td>
-                            <td className="text-lg-end font-monospace">
+                            </BaseTable.Cell>
+                        </BaseTable.Row>
+                        <BaseTable.Row>
+                            <BaseTable.Cell className="w-full">Reserved Compute Units</BaseTable.Cell>
+                            <BaseTable.Cell className="text-right font-mono">
                                 <span>
                                     {totalRequestedCUs.toLocaleString()} / {maxComputeUnits.toLocaleString()} (
                                     {Math.round((totalRequestedCUs / maxComputeUnits) * 100)}%)
                                 </span>
-                            </td>
-                        </tr>
+                            </BaseTable.Cell>
+                        </BaseTable.Row>
                     </TableCardBody>
-                </div>
+                </Card>
                 <MoreSection slot={slotNumber}>{children}</MoreSection>
             </>
         );
     }
     return (
-        <div className="container mt-n3">
-            <div className="header">
-                <div className="header-body">
-                    <h6 className="header-pretitle">Details</h6>
-                    <h2 className="header-title">Block</h2>
+        <PageContainer variant="pulled-up">
+            <div className="mb-8">
+                <div className="border-0 border-b border-solid border-dk-gray-700-dark py-6">
+                    <h6 className="uppercase tracking-[0.08em] text-dk-gray-700">Details</h6>
+                    <h2 className="mb-0">Block</h2>
                 </div>
             </div>
             {content}
-        </div>
+        </PageContainer>
     );
 }
 
-export default function BlockLayout({ children, params }: Props) {
+export default function BlockLayout(props: Props) {
+    const params = use(props.params);
+
+    const { children } = props;
+
     return (
         <BlockProvider>
             <BlockLayoutInner params={params}>{children}</BlockLayoutInner>
@@ -234,65 +246,28 @@ export default function BlockLayout({ children, params }: Props) {
     );
 }
 
-const TABS: Tab[] = [
-    {
-        path: '',
-        slug: 'history',
-        title: 'Transactions',
-    },
-    {
-        path: 'rewards',
-        slug: 'rewards',
-        title: 'Rewards',
-    },
-    {
-        path: 'programs',
-        slug: 'programs',
-        title: 'Programs',
-    },
-    {
-        path: 'accounts',
-        slug: 'accounts',
-        title: 'Accounts',
-    },
+const TABS: NavigationTab[] = [
+    { path: '', title: 'Transactions' },
+    { path: 'rewards', title: 'Rewards' },
+    { path: 'programs', title: 'Programs' },
+    { path: 'accounts', title: 'Accounts' },
 ];
 
-type MoreTabs = 'history' | 'rewards' | 'programs' | 'accounts';
-
-type Tab = {
-    slug: MoreTabs;
-    title: string;
-    path: string;
-};
-
 function MoreSection({ children, slot }: { children: React.ReactNode; slot: number }) {
+    const searchParams = useSearchParams();
+    const buildHref = React.useCallback(
+        (path: string) => pickClusterParams(`/block/${slot}/${path}`, searchParams ?? undefined),
+        [slot, searchParams],
+    );
+
     return (
         <>
-            <div className="container">
-                <div className="header">
-                    <div className="header-body pt-0">
-                        <ul className="nav nav-tabs nav-overflow header-tabs">
-                            {TABS.map(({ title, slug, path }) => (
-                                <TabLink key={slug} slot={slot} path={path} title={title} />
-                            ))}
-                        </ul>
-                    </div>
-                </div>
-            </div>
+            <StickyHeader>
+                <PageContainer>
+                    <NavigationTabs buildHref={buildHref} tabs={TABS} />
+                </PageContainer>
+            </StickyHeader>
             {children}
         </>
-    );
-}
-
-function TabLink({ path, slot, title }: { path: string; slot: number; title: string }) {
-    const tabPath = useClusterPath({ pathname: `/block/${slot}/${path}` });
-    const selectedLayoutSegment = useSelectedLayoutSegment();
-    const isActive = (selectedLayoutSegment === null && path === '') || selectedLayoutSegment === path;
-    return (
-        <li className="nav-item">
-            <Link className={`${isActive ? 'active ' : ''}nav-link`} href={tabPath} scroll={false}>
-                {title}
-            </Link>
-        </li>
     );
 }

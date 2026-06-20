@@ -43,3 +43,35 @@ button_clicked → receipt_viewed / no_receipt → view_tx_clicked
 | `view_tx_clicked` | `signature` |
 
 All events are prefixed with `rcpt_`.
+
+## Search Tracking
+
+Tracks search usage.
+
+### Events
+
+| Event                  | Parameters                       |
+| ---------------------- | -------------------------------- |
+| `srch_performed`       | `query_length`, `results_count`  |
+| `srch_result_selected` | `result_type`, `result_verified` |
+
+All events are prefixed with `srch_`.
+
+- `query_length`: length of the trimmed search query (no raw query to avoid logging addresses/keys)
+- `results_count`: total number of results across all groups returned
+- `result_type`: entity type derived from the result pathname (e.g. `address`, `tx`, `block`, `epoch`, `validator`)
+- `result_verified`: whether the selected result has a verified badge
+
+## Refresh Button Tracking
+
+Tracks usage of the Refresh button across the Explorer.
+
+### Events
+
+| Event | Parameters |
+|-------|------------|
+| `button_clicked` | `section` |
+
+All events are prefixed with `rfsh_`.
+
+The `section` parameter identifies the page surface where the button was clicked. Each call site provides a hardcoded literal (e.g. `transaction_card`, `token_mint_card`, `vote_account_section`, `token_history_card`). Shared components (`AccountHeader`, `HistoryCardHeader`) accept an explicit `analyticsSection` prop so the tracked value is decoupled from display text.

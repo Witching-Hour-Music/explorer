@@ -1,5 +1,5 @@
 import { Address } from '@components/common/Address';
-import { InstructionDetailsProps } from '@components/transaction/InstructionsSection';
+import { InstructionDetailsProps } from '@features/transaction';
 import { useCluster } from '@providers/cluster';
 import { PublicKey } from '@solana/web3.js';
 import { displayTimestamp } from '@utils/date';
@@ -7,6 +7,9 @@ import { camelToTitleCase } from '@utils/index';
 import { ParsedInfo } from '@validators/index';
 import React from 'react';
 import { create, Struct } from 'superstruct';
+
+import { Logger } from '@/app/shared/lib/logger';
+import { BaseTable } from '@/app/shared/ui/Table';
 
 import { InstructionCard } from '../InstructionCard';
 import { UnknownDetailsCard } from '../UnknownDetailsCard';
@@ -40,7 +43,7 @@ export function VoteDetailsCard(props: InstructionDetailsProps) {
                 return renderDetails<VoteSwitchInfo>(props, parsed, VoteSwitchInfo);
         }
     } catch (error) {
-        console.error(error, {
+        Logger.error(error, {
             url,
         });
     }
@@ -61,49 +64,51 @@ function renderDetails<T extends object>(props: InstructionDetailsProps, parsed:
 
         if (key === 'vote') {
             attributes.push(
-                <tr key="vote-hash">
-                    <td>Vote Hash</td>
-                    <td className="text-lg-end">
-                        <pre className="d-inline-block text-start mb-0">{value.hash}</pre>
-                    </td>
-                </tr>
+                <BaseTable.Row key="vote-hash">
+                    <BaseTable.Cell>Vote Hash</BaseTable.Cell>
+                    <BaseTable.Cell className="text-right">
+                        <pre className="mb-0 inline-block text-left">{value.hash}</pre>
+                    </BaseTable.Cell>
+                </BaseTable.Row>,
             );
 
             if (value.timestamp) {
                 attributes.push(
-                    <tr key="timestamp">
-                        <td>Timestamp</td>
-                        <td className="text-lg-end font-monospace">{displayTimestamp(value.timestamp * 1000)}</td>
-                    </tr>
+                    <BaseTable.Row key="timestamp">
+                        <BaseTable.Cell>Timestamp</BaseTable.Cell>
+                        <BaseTable.Cell className="text-right font-mono">
+                            {displayTimestamp(value.timestamp * 1000)}
+                        </BaseTable.Cell>
+                    </BaseTable.Row>,
                 );
             }
 
             attributes.push(
-                <tr key="vote-slots">
-                    <td>Slots</td>
-                    <td className="text-lg-end font-monospace">
-                        <pre className="d-inline-block text-start mb-0">{value.slots.join('\n')}</pre>
-                    </td>
-                </tr>
+                <BaseTable.Row key="vote-slots">
+                    <BaseTable.Cell>Slots</BaseTable.Cell>
+                    <BaseTable.Cell className="text-right font-mono">
+                        <pre className="mb-0 inline-block text-left">{value.slots.join('\n')}</pre>
+                    </BaseTable.Cell>
+                </BaseTable.Row>,
             );
         } else {
             attributes.push(
-                <tr key={key}>
-                    <td>{camelToTitleCase(key)} </td>
-                    <td className="text-lg-end">{value}</td>
-                </tr>
+                <BaseTable.Row key={key}>
+                    <BaseTable.Cell>{camelToTitleCase(key)} </BaseTable.Cell>
+                    <BaseTable.Cell className="text-right">{value}</BaseTable.Cell>
+                </BaseTable.Row>,
             );
         }
     }
 
     return (
         <InstructionCard {...props} title={`Vote: ${camelToTitleCase(parsed.type)}`}>
-            <tr>
-                <td>Program</td>
-                <td className="text-lg-end">
+            <BaseTable.Row>
+                <BaseTable.Cell>Program</BaseTable.Cell>
+                <BaseTable.Cell className="text-right">
                     <Address pubkey={props.ix.programId} alignRight link />
-                </td>
-            </tr>
+                </BaseTable.Cell>
+            </BaseTable.Row>
             {attributes}
         </InstructionCard>
     );

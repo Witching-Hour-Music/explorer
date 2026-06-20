@@ -7,6 +7,8 @@ import { Connection, SignatureResult, TransactionConfirmationStatus, Transaction
 import { Cluster } from '@utils/cluster';
 import React from 'react';
 
+import { Logger } from '@/app/shared/lib/logger';
+
 import { DetailsProvider } from './parsed';
 import { RawDetailsProvider } from './raw';
 
@@ -32,8 +34,10 @@ export interface TransactionStatus {
 type State = Cache.State<TransactionStatus>;
 type Dispatch = Cache.Dispatch<TransactionStatus>;
 
-const StateContext = React.createContext<State | undefined>(undefined);
-const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
+export const StateContext: React.Context<State | undefined> = React.createContext<State | undefined>(undefined);
+export const DispatchContext: React.Context<Dispatch | undefined> = React.createContext<Dispatch | undefined>(
+    undefined,
+);
 
 type TransactionsProviderProps = { children: React.ReactNode };
 export function TransactionsProvider({ children }: TransactionsProviderProps) {
@@ -60,7 +64,7 @@ export async function fetchTransactionStatus(
     dispatch: Dispatch,
     signature: TransactionSignature,
     cluster: Cluster,
-    url: string
+    url: string,
 ) {
     dispatch({
         key: signature,
@@ -91,7 +95,7 @@ export async function fetchTransactionStatus(
                 blockTime = await connection.getBlockTime(value.slot);
             } catch (error) {
                 if (cluster === Cluster.MainnetBeta && confirmations === 'max') {
-                    console.error(error, { slot: `${value.slot}` });
+                    Logger.error(error, { slot: `${value.slot}` });
                 }
             }
             const timestamp: Timestamp = blockTime !== null ? blockTime : 'unavailable';
@@ -108,7 +112,7 @@ export async function fetchTransactionStatus(
         fetchStatus = FetchStatus.Fetched;
     } catch (error) {
         if (cluster !== Cluster.Custom) {
-            console.error(error, { url });
+            Logger.error(error, { url });
         }
         fetchStatus = FetchStatus.FetchFailed;
     }
@@ -123,7 +127,7 @@ export async function fetchTransactionStatus(
 }
 
 export function useTransactionStatus(
-    signature: TransactionSignature | undefined
+    signature: TransactionSignature | undefined,
 ): Cache.CacheEntry<TransactionStatus> | undefined {
     const context = React.useContext(StateContext);
 
@@ -149,6 +153,6 @@ export function useFetchTransactionStatus() {
         (signature: TransactionSignature) => {
             fetchTransactionStatus(dispatch, signature, cluster, url);
         },
-        [dispatch, cluster, url]
+        [dispatch, cluster, url],
     );
 }

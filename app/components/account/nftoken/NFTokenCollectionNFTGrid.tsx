@@ -1,9 +1,11 @@
 'use client';
 
+import { RefreshButton } from '@components/shared/ui/refresh-button';
 import { useClusterPath } from '@utils/url';
 import Link from 'next/link';
 import React from 'react';
-import { RefreshCw } from 'react-feather';
+
+import { Card, CardHeader, CardTitle } from '@/app/shared/ui/Card';
 
 import { useCollectionNfts } from './nftoken-hooks';
 import { NftokenTypes } from './nftoken-types';
@@ -14,18 +16,17 @@ export function NFTokenCollectionNFTGrid({ collection }: { collection: string })
         collectionAddress: collection,
     });
     return (
-        <div className="card">
-            <div className="card-header align-items-center">
-                <h3 className="card-header-title">NFTs</h3>
+        <Card ui="dashkit">
+            <CardHeader ui="dashkit">
+                <CardTitle as="h3" ui="dashkit">
+                    NFTs
+                </CardTitle>
 
-                <button className="btn btn-white btn-sm" onClick={() => mutate()}>
-                    <RefreshCw className="align-text-top me-2" size={13} />
-                    Refresh
-                </button>
-            </div>
+                <RefreshButton analyticsSection="nft_token_collection_grid" onClick={mutate} />
+            </CardHeader>
 
-            <div className="py-4">
-                {nfts.length === 0 && <div className={'px-4'}>No NFTs Found</div>}
+            <div className="py-6">
+                {nfts.length === 0 && <div className="px-6">No NFTs Found</div>}
 
                 {nfts.length > 0 && (
                     <div
@@ -43,7 +44,7 @@ export function NFTokenCollectionNFTGrid({ collection }: { collection: string })
                     </div>
                 )}
             </div>
-        </div>
+        </Card>
     );
 }
 

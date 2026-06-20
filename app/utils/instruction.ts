@@ -7,19 +7,31 @@ import {
 import { isTokenSwapInstruction, parseTokenSwapInstructionTitle } from '@components/instruction/token-swap/types';
 import { isTokenProgramId } from '@providers/accounts/tokens';
 import {
+    ComputeBudgetProgram,
     ConfirmedSignatureInfo,
     ParsedInstruction,
     ParsedTransactionWithMeta,
     PartiallyDecodedInstruction,
 } from '@solana/web3.js';
-import { isTokenProgram } from '@utils/programs';
+import { camelToTitleCase } from '@utils/index';
+import { isTokenProgram, ZK_ELGAMAL_PROOF_PROGRAM_ID } from '@utils/programs';
 import { intoTransactionInstruction } from '@utils/tx';
+import { getZkElGamalProofInstructionName } from '@utils/zk-elgamal-proof';
 import { ParsedInfo } from '@validators/index';
+import bs58 from 'bs58';
 import { create } from 'superstruct';
+
+import { getProgramName } from '@/app/entities/transaction-data';
+import { Logger } from '@/app/shared/lib/logger';
 
 export type InstructionType = {
     name: string;
     innerInstructions: (ParsedInstruction | PartiallyDecodedInstruction)[];
+};
+
+export type TransactionInstructionInfo = {
+    name: string;
+    program: string;
 };
 
 export interface InstructionItem {
@@ -65,7 +77,7 @@ export function getTokenProgramInstructionName(ix: ParsedInstruction, signatureI
         const type = create(rawType, TokenInstructionType);
         return IX_TITLES[type];
     } catch (err) {
-        console.error(err, { signature: signatureInfo.signature });
+        Logger.error(err, { signature: signatureInfo.signature });
         return 'Unknown';
     }
 }
@@ -73,7 +85,7 @@ export function getTokenProgramInstructionName(ix: ParsedInstruction, signatureI
 export function getTokenInstructionName(
     transactionWithMeta: ParsedTransactionWithMeta,
     ix: ParsedInstruction | PartiallyDecodedInstruction,
-    signatureInfo: ConfirmedSignatureInfo
+    signatureInfo: ConfirmedSignatureInfo,
 ) {
     let name = 'Unknown';
 
@@ -100,7 +112,7 @@ export function getTokenInstructionName(
                 return parseTokenLendingInstructionTitle(transactionInstruction);
             }
         } catch (error) {
-            console.error(error, { signature: signatureInfo.signature });
+            Logger.error(error, { signature: signatureInfo.signature });
             return undefined;
         }
     }
@@ -114,11 +126,37 @@ export function getTokenInstructionName(
     return name;
 }
 
+export function getTransactionInstructionNames(
+    transactionWithMeta: ParsedTransactionWithMeta,
+): TransactionInstructionInfo[] {
+    return transactionWithMeta.transaction.message.instructions
+        .filter(ix => !ix.programId.equals(ComputeBudgetProgram.programId))
+        .map(ix => {
+            const program = getProgramName(ix.programId);
+            if ('parsed' in ix) {
+                if (typeof ix.parsed === 'object' && ix.parsed !== null && 'type' in ix.parsed) {
+                    return { name: camelToTitleCase(String(ix.parsed.type)), program };
+                }
+                if (typeof ix.parsed === 'string') {
+                    // ix.parsed is a string (e.g. memo text) — instruction name is the program name
+                    return { name: 'Memo', program };
+                }
+            } else if (ix.programId.toBase58() === ZK_ELGAMAL_PROOF_PROGRAM_ID) {
+                // ZK ElGamal proof instructions aren't parsed by the RPC; the name lives
+                // in the 1-byte discriminator at the start of the base58-encoded data.
+                const data = bs58.decode(ix.data);
+                const discriminator = data.length > 0 ? data[0] : -1;
+                return { name: getZkElGamalProofInstructionName(discriminator), program };
+            }
+            return { name: 'Unknown Instruction', program: program === 'Unknown' ? 'Unknown Program' : program };
+        });
+}
+
 export function getTokenInstructionType(
     transactionWithMeta: ParsedTransactionWithMeta,
     ix: ParsedInstruction | PartiallyDecodedInstruction,
     signatureInfo: ConfirmedSignatureInfo,
-    index: number
+    index: number,
 ): InstructionType | undefined {
     const innerInstructions: (ParsedInstruction | PartiallyDecodedInstruction)[] = [];
 

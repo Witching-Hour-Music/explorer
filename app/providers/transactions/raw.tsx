@@ -3,14 +3,25 @@
 import * as Cache from '@providers/cache';
 import { ActionType, FetchStatus } from '@providers/cache';
 import { useCluster } from '@providers/cluster';
-import { Connection, DecompileArgs, TransactionMessage, TransactionSignature, VersionedMessage } from '@solana/web3.js';
+import {
+    type CompiledInnerInstruction,
+    Connection,
+    type DecompileArgs,
+    type Finality,
+    TransactionMessage,
+    type TransactionSignature,
+    type VersionedMessage,
+} from '@solana/web3.js';
 import { Cluster } from '@utils/cluster';
 import React from 'react';
+
+import { Logger } from '@/app/shared/lib/logger';
 
 export interface Details {
     raw?: {
         message: VersionedMessage;
         meta?: {
+            innerInstructions?: CompiledInnerInstruction[];
             postBalances: number[];
             preBalances: number[];
         };
@@ -51,10 +62,24 @@ export function useRawTransactionDetails(signature: TransactionSignature): Cache
     return context.entries[signature];
 }
 
-async function fetchRawTransaction(dispatch: Dispatch, signature: TransactionSignature, cluster: Cluster, url: string) {
+async function fetchRawTransaction(
+    dispatch: Dispatch,
+    signature: TransactionSignature,
+    cluster: Cluster,
+    url: string,
+    commitment?: Finality,
+) {
+    dispatch({
+        key: signature,
+        status: FetchStatus.Fetching,
+        type: ActionType.Update,
+        url,
+    });
+
     let fetchStatus;
     try {
         const response = await new Connection(url).getTransaction(signature, {
+            commitment,
             maxSupportedTransactionVersion: 0,
         });
         fetchStatus = FetchStatus.Fetched;
@@ -69,6 +94,7 @@ async function fetchRawTransaction(dispatch: Dispatch, signature: TransactionSig
                     message,
                     meta: response.meta
                         ? {
+                              innerInstructions: response.meta.innerInstructions ?? undefined,
                               postBalances: response.meta.postBalances,
                               preBalances: response.meta.preBalances,
                           }
@@ -88,8 +114,14 @@ async function fetchRawTransaction(dispatch: Dispatch, signature: TransactionSig
         });
     } catch (error) {
         if (cluster !== Cluster.Custom) {
-            console.error(error, { url });
+            Logger.error(error, { url });
         }
+        dispatch({
+            key: signature,
+            status: FetchStatus.FetchFailed,
+            type: ActionType.Update,
+            url,
+        });
     }
 }
 
@@ -101,9 +133,9 @@ export function useFetchRawTransaction() {
 
     const { cluster, url } = useCluster();
     return React.useCallback(
-        (signature: TransactionSignature) => {
-            url && fetchRawTransaction(dispatch, signature, cluster, url);
+        (signature: TransactionSignature, commitment?: Finality) => {
+            url && fetchRawTransaction(dispatch, signature, cluster, url, commitment);
         },
-        [dispatch, cluster, url]
+        [dispatch, cluster, url],
     );
 }
