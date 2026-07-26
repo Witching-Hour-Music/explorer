@@ -7,6 +7,9 @@
  * Usage:
  *   MAINNET_RPC_URL=https://... pnpm exec tsx scripts/update-verified-programs.ts
  *
+ * MAINNET_RPC_URL is optional. When omitted, IDL name resolution is skipped and
+ * program names fall back to repo-derived names or a truncated address.
+ *
  * Output:
  *   - public/verified-programs.json
  */
@@ -24,12 +27,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUTPUT_PATH = join(__dirname, '../public/verified-programs.json');
 
 const OSEC_BASE = 'https://verify.osec.io';
-const RPC_URL = process.env.MAINNET_RPC_URL;
-
-if (!RPC_URL) {
-    console.error('MAINNET_RPC_URL environment variable is required');
-    process.exit(1);
-}
+const RPC_URL = process.env.MAINNET_RPC_URL || undefined;
 
 interface OSecPage {
     meta: { total: number; total_pages: number; page: number };
@@ -96,8 +94,12 @@ async function main() {
     console.log(`  Fetched ${statuses.size} statuses`);
 
     console.log('Fetching IDL names from RPC...');
-    const idlNames = await fetchIdlNames(addresses);
-    console.log(`  Resolved ${idlNames.size} IDL names`);
+    const idlNames = RPC_URL ? await fetchIdlNames(addresses) : new Map<string, string>();
+    if (RPC_URL) {
+        console.log(`  Resolved ${idlNames.size} IDL names`);
+    } else {
+        console.log('  Skipped (MAINNET_RPC_URL not set)');
+    }
 
     // Only include programs confirmed as verified
     const verifiedAddresses = addresses.filter(addr => statuses.get(addr)?.is_verified === true);
